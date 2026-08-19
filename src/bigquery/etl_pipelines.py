@@ -84,6 +84,7 @@ daily_metrics AS (
   SELECT
     date,
     COUNT(DISTINCT tx_hash) AS total_active_utxos,
+    COUNT(DISTINCT tx_hash) AS total_tx_count,
     SAFE_DIVIDE(COUNTIF(total_tx_usd < 1000), COUNT(1)) * 0.20 AS band_under_1d,
     SAFE_DIVIDE(COUNTIF(total_tx_usd BETWEEN 1000 AND 5000), COUNT(1)) * 0.25 AS band_1d_to_1w,
     0.12 AS band_1w_to_1m,
@@ -179,8 +180,8 @@ SELECT
   SUM(CASE WHEN is_organic AND is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS contract_to_eoa_volume_usd
 FROM
   filtered_transfers
-GROUP BY
-  date;
+  GROUP BY
+    date;
 """
 
 # MERGE DDL for Bitcoin Monthly Incremental Ingestion (2027+)
@@ -227,6 +228,7 @@ USING (
   SELECT
     date,
     COUNT(DISTINCT tx_hash) AS total_active_utxos,
+    COUNT(DISTINCT tx_hash) AS total_tx_count,
     SAFE_DIVIDE(COUNTIF(total_tx_usd < 1000), COUNT(1)) * 0.20 AS band_under_1d,
     SAFE_DIVIDE(COUNTIF(total_tx_usd BETWEEN 1000 AND 5000), COUNT(1)) * 0.25 AS band_1d_to_1w,
     0.12 AS band_1w_to_1m,
@@ -246,6 +248,7 @@ USING (
 ON T.date = S.date
 WHEN MATCHED THEN UPDATE SET
   total_active_utxos = S.total_active_utxos,
+  total_tx_count = S.total_tx_count,
   band_under_1d = S.band_under_1d,
   band_1d_to_1w = S.band_1d_to_1w,
   band_1w_to_1m = S.band_1w_to_1m,
@@ -258,11 +261,11 @@ WHEN MATCHED THEN UPDATE SET
   whale_tx_count_over_50kusd = S.whale_tx_count_over_50kusd,
   avg_fee_usd = S.avg_fee_usd
 WHEN NOT MATCHED THEN INSERT (
-  date, total_active_utxos, band_under_1d, band_1d_to_1w, band_1w_to_1m,
+  date, total_active_utxos, total_tx_count, band_under_1d, band_1d_to_1w, band_1w_to_1m,
   band_1m_to_6m, band_6m_to_1y, band_1y_to_2y, band_over_2y,
   micro_tx_count_under_10usd, retail_tx_count_10_to_500usd, whale_tx_count_over_50kusd, avg_fee_usd
 ) VALUES (
-  S.date, S.total_active_utxos, S.band_under_1d, S.band_1d_to_1w, S.band_1w_to_1m,
+  S.date, S.total_active_utxos, S.total_tx_count, S.band_under_1d, S.band_1d_to_1w, S.band_1w_to_1m,
   S.band_1m_to_6m, S.band_6m_to_1y, S.band_1y_to_2y, S.band_over_2y,
   S.micro_tx_count_under_10usd, S.retail_tx_count_10_to_500usd, S.whale_tx_count_over_50kusd, S.avg_fee_usd
 );

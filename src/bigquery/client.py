@@ -137,32 +137,33 @@ class BigQueryAnalyticsClient:
                 agg_row["pct_dormant_supply_over_1y"] = round(agg_row.get("pct_1y_to_2y", 0.0) + agg_row.get("pct_over_2y", 0.0), 2)
 
             elif query_type == "btc_microtransactions":
-                total_utxos = sum_field("total_active_utxos")
+                total_txs_all = int(sum_field("total_tx_count"))
                 micro = int(sum_field("micro_tx_count_under_10usd"))
                 retail = int(sum_field("retail_tx_count_10_to_500usd"))
                 whale = int(sum_field("whale_tx_count_over_50kusd"))
-                total_txs = micro + retail + whale
-                if total_utxos > 0:
-                    agg_row["total_active_utxos"] = int(total_utxos)
+                classified_sum = micro + retail + whale
+                total_txs = total_txs_all if total_txs_all > 0 else classified_sum
+                if total_txs_all > 0:
+                    agg_row["total_tx_count"] = total_txs_all
                 agg_row["micro_tx_count_under_10usd"] = micro
                 agg_row["retail_tx_count_10_to_500usd"] = retail
                 agg_row["whale_tx_count_over_50kusd"] = whale
-                agg_row["total_classified_txs"] = total_txs
-                agg_row["pct_microtransactions"] = round(micro * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
-                agg_row["pct_retail_commerce"] = round(retail * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
-                agg_row["pct_whale_institutional"] = round(whale * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
-                if total_utxos > 0:
+                agg_row["total_classified_txs"] = classified_sum
+                agg_row["pct_microtransactions"] = round(micro * 100.0 / classified_sum, 2) if classified_sum > 0 else 0.0
+                agg_row["pct_retail_commerce"] = round(retail * 100.0 / classified_sum, 2) if classified_sum > 0 else 0.0
+                agg_row["pct_whale_institutional"] = round(whale * 100.0 / classified_sum, 2) if classified_sum > 0 else 0.0
+
+                # Weight average fee by the transaction count represented by that daily average
+                if total_txs > 0:
                     weighted_fee = sum(
-                        float(r.get("avg_fee_usd", 0.0)) * float(r.get("total_active_utxos", 1))
-                        for r in rows
-                    ) / total_utxos
-                    agg_row["avg_fee_usd"] = round(weighted_fee, 2)
-                elif total_txs > 0:
-                    weighted_fee = sum(
-                        float(r.get("avg_fee_usd", 0.0)) * (
-                            float(r.get("micro_tx_count_under_10usd", 0))
-                            + float(r.get("retail_tx_count_10_to_500usd", 0))
-                            + float(r.get("whale_tx_count_over_50kusd", 0))
+                        float(r.get("avg_fee_usd", 0.0)) * float(
+                            r.get("total_tx_count")
+                            if r.get("total_tx_count") is not None
+                            else (
+                                int(r.get("micro_tx_count_under_10usd", 0))
+                                + int(r.get("retail_tx_count_10_to_500usd", 0))
+                                + int(r.get("whale_tx_count_over_50kusd", 0))
+                            )
                         )
                         for r in rows
                     ) / total_txs
