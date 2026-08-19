@@ -1,9 +1,10 @@
 # Implementation Tasks & Test-Driven Execution Plan: On-Chain Analytics Oracle
 
-**Document Version:** 1.1.0  
+**Document Version:** 1.2.0  
 **Status:** Approved for Implementation  
-**Traceability Base:** `specs/design.md` (v1.1.0) & `specs/requirements.md` (v1.1.0)  
-**LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)
+**Traceability Base:** `specs/design.md` (v1.2.0) & `specs/requirements.md` (v1.2.0)  
+**LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
+**Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)
 
 ---
 
@@ -17,14 +18,14 @@ The implementation plan is organized into **7 modular execution tracks** with ex
                   ┌────────────────────┴────────────────────┐
                   ▼                                         ▼
    TRACK 2: BigQuery SQL & ETL             TRACK 3: BQ Client & Cache
-   (Data Model & Queries)                  (Circuit Breakers & SDK)
+   (Data Model & Monthly Pipelines)        (Circuit Breakers & SDK)
                   │                                         │
                   └────────────────────┬────────────────────┘
                                        │
                   ┌────────────────────┴────────────────────┐
                   ▼                                         ▼
    TRACK 4: Gemini 3.7 Flash Router        TRACK 5: uAgents Protocol
-   (Intent & Param Mapping)                (Agentverse Integration)
+   (Intent & Param Mapping)                (Agentverse & Schedulers)
                   │                                         │
                   └────────────────────┬────────────────────┘
                                        │
@@ -82,36 +83,42 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Traceability:** FR-1.1, FR-1.4, COST-2.
 * **Artifacts:** `src/bigquery/etl_pipelines.py`.
 
+### Task 2.4: Continuous Monthly Incremental Ingestion ETL Pipeline
+* **Description:** Add `run_monthly_incremental_etl(project_id, dataset_id, target_year, target_month)` to `src/bigquery/etl_pipelines.py` implementing scoped BigQuery `MERGE INTO` queries that append/update only the target month's partition without full table rescans.
+* **Dependencies:** Task 2.3.
+* **Traceability:** FR-1.6, US-2, US-3, BDD-2.
+* **Artifacts:** `src/bigquery/etl_pipelines.py`.
+
 ---
 
 ## Track 3: Parameterized BigQuery Client & LRU Cache [COMPLETED]
 
 ### Task 3.1 [TDD]: BigQuery Client & Byte Limit Tests [COMPLETED]
-* **Description:** Write unit tests using BigQuery client mocks to verify `maximum_bytes_billed = 50_000_000`, safe error traps, and in-memory LRU caching.
+* **Description:** Write unit tests verifying `maximum_bytes_billed = 50_000_000`, identifier validation, weighted ratio calculations, and in-memory LRU caching.
 * **Dependencies:** Task 1.1.
-* **Traceability:** FR-2.1, FR-2.2, FR-2.3, SEC-3, COST-1, BDD-3.
+* **Traceability:** FR-2.1, FR-2.2, FR-2.3, FR-2.4, SEC-3, COST-1, BDD-3.
 * **Artifacts:** `tests/test_bigquery_client.py`.
 
 ### Task 3.2: BigQuery Client Implementation & In-Memory LRU Cache [COMPLETED]
 * **Description:** Implement `src/bigquery/client.py` with parameterized execution, BigQuery query caching, 50 MB hard ceilings, and thread-safe in-memory LRU caching.
 * **Dependencies:** Task 3.1.
-* **Traceability:** FR-2.1, FR-2.3, SEC-3, COST-1, NFR-1.
+* **Traceability:** FR-2.1, FR-2.3, FR-2.4, SEC-3, COST-1, NFR-1.
 * **Artifacts:** `src/bigquery/client.py`.
 
 ---
 
-## Track 4: Gemini 3.7 Flash Natural Language Query Router
+## Track 4: Gemini 3.7 Flash Natural Language Query Router [COMPLETED]
 
 ### Task 4.1 [TDD]: Natural Language Semantic Router Tests [COMPLETED]
 * **Description:** Write tests verifying prompt mapping to `AnalyticsQueryRequest` and out-of-scope guidance handling.
 * **Dependencies:** Task 1.1.
-* **Traceability:** FR-3.1, FR-3.2, FR-3.3.
+* **Traceability:** FR-3.1, FR-3.2.
 * **Artifacts:** `tests/test_gemini_router.py`.
 
 ### Task 4.2: Gemini 3.7 Flash Semantic Query Router Implementation [COMPLETED]
 * **Description:** Implement `src/nl_parser/gemini_router.py` using `google-genai` with model `gemini-3.7-flash` and structured JSON output schema.
 * **Dependencies:** Task 4.1.
-* **Traceability:** FR-3.1, FR-3.2, FR-3.3.
+* **Traceability:** FR-3.1, FR-3.2.
 * **Artifacts:** `src/nl_parser/gemini_router.py`.
 
 ---
@@ -125,20 +132,20 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Artifacts:** `tests/test_protocols.py`.
 
 ### Task 5.2: uAgents Protocol & Handler Implementation [COMPLETED]
-* **Description:** Implement `src/agent/protocols/analytics_protocol.py` defining Pydantic models, rate limiter integration, and BigQuery client execution.
+* **Description:** Implement `src/agent/protocols/analytics_protocol.py` defining Pydantic models, rate limiter integration, and non-blocking `asyncio.to_thread` BigQuery execution.
 * **Dependencies:** Task 5.1.
 * **Traceability:** FR-4.2, FR-4.3, SEC-1.
 * **Artifacts:** `src/agent/protocols/analytics_protocol.py`.
 
-### Task 5.3: Agent Main Runner & Agentverse Mailbox Registration
-* **Description:** Implement `src/agent/main.py` configuring the `Agent` instance with cryptographic wallet seed, Agentverse Mailbox endpoint, and startup banner with endpoint metadata.
-* **Dependencies:** Task 5.2.
-* **Traceability:** FR-4.1, NFR-3, US-2.
+### Task 5.3: Agent Main Runner & Scheduled Monthly Ingestion Cron
+* **Description:** Implement `src/agent/main.py` configuring the `Agent` instance with cryptographic wallet seed, Agentverse Mailbox endpoint, and an automated monthly background scheduler that invokes `run_monthly_incremental_etl` on the 1st of each calendar month.
+* **Dependencies:** Task 2.4, Task 5.2.
+* **Traceability:** FR-4.1, FR-4.4, NFR-3, US-2, US-3.
 * **Artifacts:** `src/agent/main.py`.
 
 ---
 
-## Track 6: End-to-End Verification & Research Documentation
+## Track 6: End-to-End Verification & Research Documentation [COMPLETED]
 
 ### Task 6.1: Test Suite Execution & 100% Pass Verification [COMPLETED]
 * **Description:** Execute `pytest` across all unit, security, and protocol test suites.
@@ -156,9 +163,6 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 
 ## Track 7: Marimo Interactive Research Notebooks & Empirical Visualizations
 
-> [!TIP]
-> **PARALLEL EXECUTION:** Track 7 notebooks can be developed directly utilizing the existing BigQuery client and SQL templates.
-
 ### Task 7.1: Marimo & Visualization Dependency Configuration
 * **Description:** Update `pyproject.toml` with `marimo`, `plotly`, `pandas`, and `scipy` dependencies.
 * **Dependencies:** Task 1.1.
@@ -166,27 +170,19 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Artifacts:** `pyproject.toml`.
 
 ### Task 7.2: Bitcoin Macro & Micro-Payment Decay Marimo Notebook
-* **Description:** Implement reactive notebook `notebooks/btc_analysis.py`:
-  1. Rich explanatory markdown cells with \(\LaTeX\) equations (\(V = \frac{Y}{M}\), \(\text{FeeDrag}_{10} = \frac{\text{Fee}}{\$10} \times 100\%\)).
-  2. Parameterized BigQuery data retrieval cell.
-  3. Interactive Plotly Stacked Area HODL Wave chart (2014–2026).
-  4. Logarithmic Fee-to-Value Drag scatter curve and micro-transaction density decay analysis.
+* **Description:** Implement reactive notebook `notebooks/btc_analysis.py` with explanatory \(\LaTeX\) cells, BigQuery data loading, and Plotly stacked area HODL wave charts.
 * **Dependencies:** Task 2.1, Task 3.2, Task 7.1.
 * **Traceability:** FR-5.1, FR-5.2, FR-5.3, US-1, BDD-2.
 * **Artifacts:** `notebooks/btc_analysis.py`.
 
 ### Task 7.3: USDC Organic Volume & Counterparty Topology Marimo Notebook
-* **Description:** Implement reactive notebook `notebooks/usdc_analysis.py`:
-  1. Rich explanatory markdown cells with \(\LaTeX\) equations (\(\Phi_{\text{organic}} = \frac{\sum V_{\text{organic}}}{\sum V_{\text{raw}}}\), \(\Omega_{\text{retail}}\)).
-  2. Parameterized BigQuery data retrieval cell applying the Visa/Artemis noise filter.
-  3. Interactive Plotly Organic vs. Bot Volume waterfall and ratio time series (proving ~70% bot noise).
-  4. Counterparty topology breakdown chart (EOA-to-EOA commerce vs EOA-to-Contract DeFi).
+* **Description:** Implement reactive notebook `notebooks/usdc_analysis.py` with explanatory \(\LaTeX\) cells, noise filtering, and EOA vs. Contract charts.
 * **Dependencies:** Task 2.2, Task 3.2, Task 7.1.
 * **Traceability:** FR-5.1, FR-5.2, FR-5.3, US-1, BDD-2.
 * **Artifacts:** `notebooks/usdc_analysis.py`.
 
 ### Task 7.4: Marimo Reactive Graph Verification & Export Tests
-* **Description:** Write unit tests to verify that `notebooks/btc_analysis.py` and `notebooks/usdc_analysis.py` instantiate valid Marimo `App` dependency graphs and execute without syntax or import errors.
+* **Description:** Write unit tests to verify that `notebooks/btc_analysis.py` and `notebooks/usdc_analysis.py` instantiate valid Marimo `App` dependency graphs and execute cleanly.
 * **Dependencies:** Task 7.2, Task 7.3.
-* **Traceability:** FR-5.4, NFR-2, BDD-2.
+* **Traceability:** FR-5.1, NFR-2.
 * **Artifacts:** `tests/test_notebooks.py`.
