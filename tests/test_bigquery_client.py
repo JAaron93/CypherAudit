@@ -8,7 +8,7 @@ from src.bigquery.client import BigQueryAnalyticsClient, BigQueryExecutionError,
 class TestBigQueryAnalyticsClient:
     """Verifies parameterized execution, byte limits, identifier checks, and in-memory LRU caching."""
 
-    def test_client_enforces_maximum_bytes_billed(self):
+    def test_client_enforces_maximum_bytes_billed(self) -> None:
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
             mock_bq.return_value = mock_instance
@@ -21,14 +21,14 @@ class TestBigQueryAnalyticsClient:
 
             assert client.max_bytes_billed == 50_000_000
 
-    def test_invalid_sql_identifiers_rejected(self):
+    def test_invalid_sql_identifiers_rejected(self) -> None:
         with pytest.raises(BigQueryExecutionError, match="Invalid SQL identifier"):
             validate_identifier("bad-project; DROP TABLE users;--", "project_id")
 
         with pytest.raises(BigQueryExecutionError, match="Invalid SQL identifier"):
             BigQueryAnalyticsClient(project_id="test`project")
 
-    def test_lru_cache_avoids_duplicate_query_execution(self):
+    def test_lru_cache_avoids_duplicate_query_execution(self) -> None:
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
             mock_bq.return_value = mock_instance
@@ -58,7 +58,7 @@ class TestBigQueryAnalyticsClient:
             assert res2["is_cached"] is True
             assert mock_instance.query.call_count == 1  # Still 1!
 
-    def test_granularity_aggregation_monthly(self):
+    def test_granularity_aggregation_monthly(self) -> None:
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
             mock_bq.return_value = mock_instance
@@ -91,7 +91,7 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][1]["period"] == "2025-02"
             assert res["data_points"][1]["organic_volume_pct"] == 25.0
 
-    def test_granularity_aggregation_btc_hodl_waves_supply_weighted(self):
+    def test_granularity_aggregation_btc_hodl_waves_supply_weighted(self) -> None:
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
             mock_bq.return_value = mock_instance
@@ -145,7 +145,7 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][0]["pct_under_1d"] == 46.0  # (100*10 + 900*50)/1000
             assert res["data_points"][0]["pct_dormant_supply_over_1y"] == 11.0  # (100*20 + 900*10)/1000
 
-    def test_granularity_aggregation_btc_microtransactions_weighted_fee(self):
+    def test_granularity_aggregation_btc_microtransactions_weighted_fee(self) -> None:
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
             mock_bq.return_value = mock_instance
@@ -188,7 +188,7 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][0]["avg_fee_usd"] == 4.60
             assert res["data_points"][0]["fee_drag_pct_on_10usd_purchase"] == 46.0
 
-    def test_granularity_aggregation_usdc_eoa_topology(self):
+    def test_granularity_aggregation_usdc_eoa_topology(self) -> None:
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
             mock_bq.return_value = mock_instance
@@ -232,7 +232,7 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][0]["pct_defi_smart_contract"] == 50.0
             assert res["data_points"][0]["pct_contract_payout"] == 10.0
 
-    def test_byte_limit_exceeded_handled_gracefully(self):
+    def test_byte_limit_exceeded_handled_gracefully(self) -> None:
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
             mock_bq.return_value = mock_instance

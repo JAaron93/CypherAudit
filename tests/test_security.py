@@ -9,7 +9,7 @@ from src.agent.security.circuit_breaker import SecurityCircuitBreaker, SecurityV
 class TestTokenBucketRateLimiter:
     """Verifies that rate limiting throttles excessive requests per agent_address / IP."""
 
-    def test_allow_requests_within_limit(self):
+    def test_allow_requests_within_limit(self) -> None:
         limiter = TokenBucketRateLimiter(rate_per_minute=5, rate_per_day=30)
         agent_id = "agent1qtestaddress123"
 
@@ -19,7 +19,7 @@ class TestTokenBucketRateLimiter:
             assert allowed is True
             assert reason == "OK"
 
-    def test_block_burst_requests_exceeding_per_minute(self):
+    def test_block_burst_requests_exceeding_per_minute(self) -> None:
         limiter = TokenBucketRateLimiter(rate_per_minute=5, rate_per_day=30)
         agent_id = "agent1qspambot456"
 
@@ -32,7 +32,7 @@ class TestTokenBucketRateLimiter:
         assert allowed is False
         assert "per-minute limit exceeded" in reason.lower()
 
-    def test_independent_rate_limits_across_different_agents(self):
+    def test_independent_rate_limits_across_different_agents(self) -> None:
         limiter = TokenBucketRateLimiter(rate_per_minute=2, rate_per_day=10)
         agent_a = "agent1q_alice"
         agent_b = "agent1q_bob"
@@ -49,19 +49,19 @@ class TestTokenBucketRateLimiter:
 class TestSecurityCircuitBreaker:
     """Verifies input sanitization and protection against SQL injection / abnormal payloads."""
 
-    def test_valid_query_types_pass(self):
+    def test_valid_query_types_pass(self) -> None:
         breaker = SecurityCircuitBreaker()
         assert breaker.validate_query_type("btc_hodl_waves") is True
         assert breaker.validate_query_type("btc_microtransactions") is True
         assert breaker.validate_query_type("usdc_organic_volume") is True
         assert breaker.validate_query_type("usdc_eoa_topology") is True
 
-    def test_invalid_query_type_raises_violation(self):
+    def test_invalid_query_type_raises_violation(self) -> None:
         breaker = SecurityCircuitBreaker()
         with pytest.raises(SecurityViolationError, match="Unauthorized query_type"):
             breaker.validate_query_type("arbitrary_raw_sql_execution")
 
-    def test_date_format_validation(self):
+    def test_date_format_validation(self) -> None:
         breaker = SecurityCircuitBreaker()
         assert breaker.validate_date("2024-01-01") == "2024-01-01"
         assert breaker.validate_date("2026-08-18") == "2026-08-18"
@@ -72,7 +72,7 @@ class TestSecurityCircuitBreaker:
         with pytest.raises(SecurityViolationError, match="Invalid calendar date"):
             breaker.validate_date("2024-99-99")
 
-    def test_prevent_sql_injection_payloads(self):
+    def test_prevent_sql_injection_payloads(self) -> None:
         breaker = SecurityCircuitBreaker()
         malicious_inputs = [
             "2024-01-01' OR '1'='1",

@@ -7,7 +7,7 @@ guardrails and BigQuery clients, and exposes the blockchain analytics protocol.
 import os
 import logging
 from dotenv import load_dotenv
-from uagents import Agent
+from uagents import Agent, Context
 
 from src.agent.protocols.analytics_protocol import create_analytics_protocol
 from src.agent.security.circuit_breaker import SecurityCircuitBreaker
@@ -27,7 +27,10 @@ logger = logging.getLogger("signalchain_oracle")
 def create_agent() -> Agent:
     """Factory creating and configuring the SignalChain Oracle uAgent instance."""
     agent_name = os.getenv("AGENT_NAME", "signalchain-oracle")
-    agent_seed = os.getenv("AGENT_SEED", "signalchain-oracle-default-production-seed-2026")
+    agent_seed = os.getenv("AGENT_SEED")
+    if not agent_seed:
+        raise ValueError("AGENT_SEED environment variable is required to guarantee secure cryptographic agent identity.")
+
     agent_port = int(os.getenv("AGENT_PORT", "8000"))
     mailbox_key = os.getenv("AGENTVERSE_MAILBOX_KEY")
     endpoint = os.getenv("AGENT_ENDPOINT")
@@ -72,7 +75,7 @@ def create_agent() -> Agent:
 
     # 3. Register Startup Event Banner
     @agent.on_event("startup")
-    async def startup_handler(ctx):
+    async def startup_handler(ctx: Context) -> None:
         ctx.logger.info("=" * 70)
         ctx.logger.info("  🚀 SignalChain Oracle (CypherAudit) Agent Initialized")
         ctx.logger.info(f"  • Agent Name:     {agent.name}")
@@ -85,7 +88,7 @@ def create_agent() -> Agent:
     return agent
 
 
-def main():
+def main() -> None:
     """Starts the uAgent runtime loop."""
     logger.info("Starting SignalChain Oracle daemon...")
     agent = create_agent()

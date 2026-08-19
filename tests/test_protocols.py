@@ -8,7 +8,7 @@ from src.agent.protocols.analytics_protocol import AnalyticsQueryRequest, Analyt
 class TestAnalyticsProtocolModels:
     """Verifies Pydantic schema validation for Agentverse message exchange."""
 
-    def test_valid_request_serialization(self):
+    def test_valid_request_serialization(self) -> None:
         req = AnalyticsQueryRequest(
             query_type="btc_hodl_waves",
             start_date="2025-01-01",
@@ -19,11 +19,11 @@ class TestAnalyticsProtocolModels:
         assert req.start_date == "2025-01-01"
         assert req.granularity == "daily"
 
-    def test_request_requires_fields(self):
+    def test_request_requires_fields(self) -> None:
         with pytest.raises(ValidationError):
             AnalyticsQueryRequest(query_type="btc_hodl_waves")  # missing dates
 
-    def test_response_serialization(self):
+    def test_response_serialization(self) -> None:
         resp = AnalyticsQueryResponse(
             status="SUCCESS",
             query_type="usdc_organic_volume",
