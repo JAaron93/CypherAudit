@@ -1,6 +1,6 @@
 """Token Bucket / Leaky Bucket Rate Limiter for SignalChain Oracle.
 
-Provides defense-in-depth protection against API quota exhaustion, script kiddies,
+Provides defense-in-depth protection against API quota exhaustion, opportunistic adversaries,
 and spam bots targeting the ASI Agentverse endpoint.
 """
 

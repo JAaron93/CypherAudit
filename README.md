@@ -100,7 +100,7 @@ To enable high-speed queries for external agents while keeping Google Cloud quer
 
 ## 🛡️ Defense-in-Depth Security & Cost Hardening
 
-CypherAudit enforces strict security guardrails to protect against API abuse, script kiddies, and billing exhaustion:
+CypherAudit enforces strict security guardrails to protect against API abuse, opportunistic adversaries, and billing exhaustion:
 
 * **Hard BigQuery Byte Cap:** Every query sets `maximum_bytes_billed = 50_000_000` (50 MB ceiling). Any query exceeding this threshold is immediately aborted by BigQuery before incurring charges.
 * **Zero Dynamic SQL:** Zero string interpolation or raw SQL execution. Queries strictly use `bigquery.ScalarQueryParameter` with input whitelisting.
