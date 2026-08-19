@@ -1,0 +1,9 @@
+{
+  "strictMode": true,
+  "rulesPath": ".greptile/rules.md",
+  "ignoredPaths": [
+    ".venv/**",
+    "__pycache__/**",
+    ".pytest_cache/**"
+  ]
+}
