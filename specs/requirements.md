@@ -1,8 +1,8 @@
 # Requirements Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.4.0  
+**Document Version:** 1.5.0  
 **Status:** Approved for Implementation (Final Baseline)  
-**Traceability Base:** `specs/design.md` (v1.4.0)  
+**Traceability Base:** `specs/design.md` (v1.5.0)  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
@@ -48,10 +48,11 @@
 * **FR-3.1:** The system shall provide a natural language parser (`src/nl_parser/gemini_router.py`) powered explicitly by **Gemini 3.7 Flash (`gemini-3.7-flash`)** via `google-genai`.
 * **FR-3.2:** The router shall map incoming user/agent prompts into a structured `AnalyticsQueryRequest` with strict type validation.
 
-### FR-4: ASI Agentverse / uAgents Protocol
+### FR-4: ASI Agentverse / uAgents Protocol & Modular Instructions
 * **FR-4.1:** The agent (`src/agent/main.py`) shall instantiate a Fetch.ai `Agent` with persistent cryptographic identity and Mailbox connectivity.
 * **FR-4.2:** The agent shall register the `blockchain_analytics_protocol_v1` protocol handling `AnalyticsQueryRequest` and returning `AnalyticsQueryResponse`.
 * **FR-4.3:** The agent shall execute BigQuery calls asynchronously (`asyncio.to_thread`) to prevent blocking the event loop.
+* **FR-4.4:** The agent shall decouple its system prompt, analytical persona, economic interpretation guidelines, and financial disclaimers into a dedicated markdown file (`src/agent/prompts/oracle_instructions.md`), loaded dynamically at runtime.
 
 ### FR-5: Marimo Interactive Research Notebooks & Cloud/WASM Publishing
 * **FR-5.1:** The system shall provide two reactive Marimo notebooks (`notebooks/btc_analysis.py` and `notebooks/usdc_analysis.py`).

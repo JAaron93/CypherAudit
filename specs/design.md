@@ -1,6 +1,6 @@
 # Architectural Design Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.4.0  
+**Document Version:** 1.5.0  
 **Status:** Approved for Implementation (Final Baseline)  
 **Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks (WASM / GitHub Pages / molab), Python 3.11+  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`) via `google-genai`  
@@ -16,7 +16,7 @@ The primary objective of this project is to build an empirical, reproducible **B
 The project operates through four coordinated delivery surfaces:
 1. **Interactive Marimo Research Notebooks:** Reactive Python notebooks (`marimo`) executing BigQuery queries, performing statistical hypothesis tests with rich \(\LaTeX\) documentation, and rendering publication-quality interactive visualizations.
 2. **Automated Cloud Hosting & Web Publishing:** Following each monthly data ingestion on the 1st of the month, the pipeline automatically compiles the Marimo notebooks into interactive, standalone WebAssembly web applications (`marimo export html-wasm --mode run`) hosted for free on **GitHub Pages** / **molab** (Marimo's official cloud environment).
-3. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.7 Flash (`gemini-3.7-flash`)** acting as a public, cost-protected **On-Chain Analytics Oracle** on Fetch.ai's Agentverse.
+3. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.7 Flash (`gemini-3.7-flash`)** acting as a public, cost-protected **On-Chain Analytics Oracle** on Fetch.ai's Agentverse, driven by modular research persona instructions (`src/agent/prompts/oracle_instructions.md`).
 4. **Google Cloud Managed Ingestion Cron (2027+ Future-Proofing):** A serverless recurring data pipeline managed directly by **Google Cloud Scheduler / BigQuery Scheduled Queries** running on the 1st of every month (`0 0 1 * *` UTC).
 
 ---
@@ -101,9 +101,10 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
  │    MARIMO CLOUD / WASM PUBLISHING PIPELINE │ │  uAGENTS / AGENTVERSE ANALYTICS ORACLE   │
  ├───────────────────────────────────────────┤ ├──────────────────────────────────────────┤
  │ • Automated `marimo export html-wasm`     │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │
- │ • Interactive UI (Plotly & LaTeX)         │ │ • In-Memory Rate Limiter (Token Bucket)  │
- │ • Hosted on GitHub Pages / molab          │ │ • BigQuery Client (`max_bytes=50MB`)     │
- │ • Zero-Cost ($0.00), Instant Web Access   │ │ • ASI Agentverse Mailbox & Almanac       │
+ │ • Interactive UI (Plotly & LaTeX)         │ │ • Modular Instructions (`prompts/`)      │
+ │ • Hosted on GitHub Pages / molab          │ │ • In-Memory Rate Limiter (Token Bucket)  │
+ │ • Zero-Cost ($0.00), Instant Web Access   │ │ • BigQuery Client (`max_bytes=50MB`)     │
+ │                                           │ │ • ASI Agentverse Mailbox & Almanac       │
  └───────────────────────────────────────────┘ └──────────────────────────────────────────┘
 ```
 

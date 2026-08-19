@@ -54,41 +54,39 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 
 ### Task 1.3: Security Layer Implementation [COMPLETED]
 * **Description:** Implement `src/agent/security/rate_limiter.py` (token bucket per `agent_address`) and `src/agent/security/circuit_breaker.py` (input sanitization, schema assertion, dynamic SQL blocking).
+### Task 1.3: Security Circuit Breaker & Rate Limiter Implementation [COMPLETED]
+* **Description:** Implement `src/agent/security/rate_limiter.py` and `src/agent/security/circuit_breaker.py`.
 * **Dependencies:** Task 1.2.
-* **Traceability:** SEC-1, SEC-3, FR-2.2.
+* **Traceability:** SEC-1, SEC-2, SEC-3.
 * **Artifacts:** `src/agent/security/rate_limiter.py`, `src/agent/security/circuit_breaker.py`.
 
 ---
 
-## Track 2: BigQuery SQL Templates & Datamart ETL Pipeline [COMPLETED]
+## Track 2: Curated Datamart Batch & Incremental ETL Pipelines [COMPLETED]
 
-### Task 2.1: Bitcoin UTXO HODL Wave & Micro-Transaction SQL Templates [COMPLETED]
-* **Description:** Author parameterized ANSI SQL templates for:
-  1. `btc_utxo_hodl_waves.sql`: Extracts daily UTXO age distributions across 7 age bands (`<24h` to `>2y`).
-  2. `btc_microtransaction_density.sql`: Calculates daily transaction counts bucketed by value (<$10, $10–$500, >$50k) and historical fee-to-value drag.
+### Task 2.1: Bitcoin Historical & Monthly UTXO Distribution ETL [COMPLETED]
+* **Description:** Implement `BTC_ETL_SQL` in `src/bigquery/etl_pipelines.py` calculating the 7 HODL age bands and transaction size distributions.
 * **Dependencies:** Task 1.1.
-* **Traceability:** FR-1.1, FR-1.2, FR-1.3, US-1.
-* **Artifacts:** `src/bigquery/sql_queries/btc_utxo_hodl_waves.sql`, `src/bigquery/sql_queries/btc_microtransaction_density.sql`.
+* **Traceability:** FR-1.1, FR-1.2, FR-1.3, BDD-1.
+* **Artifacts:** `src/bigquery/etl_pipelines.py`, `src/bigquery/sql_queries/btc_utxo_hodl_waves.sql`, `src/bigquery/sql_queries/btc_microtransaction_density.sql`.
 
-### Task 2.2: USDC Organic Volume & EOA Topology SQL Templates [COMPLETED]
-* **Description:** Author parameterized ANSI SQL templates for:
-  1. `usdc_organic_vs_noise.sql`: Implements the Visa/Artemis noise filter on USDC ERC-20 transfers (`0xa0b8...`), isolating organic volume from bot/MEV loops.
-  2. `usdc_eoa_vs_contract.sql`: Segregates P2P/merchant transfers (EOA $\rightarrow$ EOA) from DeFi contract interactions.
+### Task 2.2: Ethereum / USDC Organic vs. Noise Filter ETL [COMPLETED]
+* **Description:** Implement `USDC_ETL_SQL` in `src/bigquery/etl_pipelines.py` implementing the Visa/Artemis noise filter and counterparty topology segregation.
 * **Dependencies:** Task 1.1.
-* **Traceability:** FR-1.4, FR-1.5, US-1.
-* **Artifacts:** `src/bigquery/sql_queries/usdc_organic_vs_noise.sql`, `src/bigquery/sql_queries/usdc_eoa_vs_contract.sql`.
+* **Traceability:** FR-1.4, FR-1.5, BDD-1.
+* **Artifacts:** `src/bigquery/etl_pipelines.py`, `src/bigquery/sql_queries/usdc_organic_vs_noise.sql`, `src/bigquery/sql_queries/usdc_eoa_vs_contract.sql`.
 
-### Task 2.3: Batch Datamart ETL Pipeline Script [COMPLETED]
-* **Description:** Build `src/bigquery/etl_pipelines.py` to automate table creation and data materialization for `crypto_analytics_mart.btc_daily_utxo_distribution` and `crypto_analytics_mart.usdc_daily_organic_metrics` with date partitioning.
-* **Dependencies:** Task 2.1, Task 2.2.
-* **Traceability:** FR-1.1, FR-1.4, COST-2.
+### Task 2.3: Datamart Pipeline CLI & Dry-Run Runner [COMPLETED]
+* **Description:** Build the CLI harness in `src/bigquery/etl_pipelines.py` to support `--dry-run` and live execution with partition and clustering specifications.
+* **Dependencies:** Tasks 2.1, 2.2.
+* **Traceability:** FR-1.1, FR-1.4, COST-1.
 * **Artifacts:** `src/bigquery/etl_pipelines.py`.
 
-### Task 2.4: Continuous Monthly Incremental Ingestion ETL & GCP Cloud Scheduler [COMPLETED]
-* **Description:** Implement `run_monthly_incremental_etl` in `src/bigquery/etl_pipelines.py` with scoped BigQuery `MERGE INTO` queries and generate Google Cloud Scheduler / BigQuery Scheduled Query DDL specifications (`0 0 1 * *` UTC) for 100% serverless automation.
-* **Dependencies:** Task 2.3.
-* **Traceability:** FR-1.6, US-2, US-3, BDD-2.
-* **Artifacts:** `src/bigquery/etl_pipelines.py`.
+### Task 2.4: Google Cloud Scheduled Ingestion Pipeline Configuration [COMPLETED]
+* **Description:** Create deployment configurations and instructions for Google Cloud Scheduler (`0 0 1 * *` UTC) and BigQuery Scheduled Queries using scoped monthly `MERGE INTO` SQL templates.
+* **Dependencies:** Tasks 2.1, 2.2, 2.3.
+* **Traceability:** FR-1.6, BDD-2, US-3.
+* **Artifacts:** `src/bigquery/etl_pipelines.py` (`BTC_MONTHLY_MERGE_SQL`, `USDC_MONTHLY_MERGE_SQL`), `README.md`.
 
 ---
 
@@ -143,6 +141,12 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Dependencies:** Task 5.2.
 * **Traceability:** FR-4.1, NFR-3, US-2, US-3.
 * **Artifacts:** `src/agent/main.py`.
+
+### Task 5.4: SignalChain Oracle Persona & Modular Instructions File
+* **Description:** Create `src/agent/prompts/oracle_instructions.md` decoupling system prompts, research persona, statistical interpretation standards, \(\LaTeX\) rendering rules, and financial disclaimers from Python code, and update `gemini_router.py` / `main.py` to dynamically ingest this instructions file.
+* **Dependencies:** Task 5.3.
+* **Traceability:** FR-4.4, US-1, US-2.
+* **Artifacts:** `src/agent/prompts/oracle_instructions.md`.
 
 ---
 
