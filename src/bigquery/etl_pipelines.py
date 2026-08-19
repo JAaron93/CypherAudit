@@ -17,6 +17,7 @@ import os
 import re
 import calendar
 import logging
+from typing import Optional
 from google.cloud import bigquery
 
 logging.basicConfig(level=logging.INFO)
@@ -472,7 +473,7 @@ def run_etl_pipeline(
     dataset_id: str = "crypto_analytics_mart",
     start_date: str = "2014-01-01",
     end_date: str = "2026-01-01",
-    max_bytes_billed: int = 500_000_000_000,  # 500 GB ceiling for multi-year baseline batch
+    max_bytes_billed: Optional[int] = None,  # None removes artificial client billing caps on multi-terabyte baseline scans
     dry_run: bool = False,
 ):
     """Executes or dry-runs the baseline BigQuery Batch ETL pipeline (2014–2026)."""
@@ -502,7 +503,7 @@ def run_etl_pipeline(
 
     job_config = bigquery.QueryJobConfig(
         dry_run=dry_run,
-        maximum_bytes_billed=max_bytes_billed if not dry_run else None,
+        maximum_bytes_billed=max_bytes_billed if not dry_run and max_bytes_billed is not None else None,
     )
 
     for name, sql in [("Bitcoin Datamart", btc_sql), ("USDC Datamart", usdc_sql)]:
