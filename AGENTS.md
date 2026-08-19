@@ -64,6 +64,8 @@ All code and queries MUST strictly comply with the **Always-Free Tier** ceilings
 * **Identifier Sanitization:** Never concatenate raw strings into SQL queries. Always validate `project_id` and `dataset_id` using `validate_identifier` (`^[a-zA-Z0-9_\-\.]+$`).
 * **Rate Limiting:** Every incoming agent query must pass through the Token Bucket Rate Limiter (`5 req/min`, `30 req/day` per agent address).
 * **Asynchronous Execution:** BigQuery execution within uAgents event handlers must use `await asyncio.to_thread(...)` to prevent blocking the async event loop.
+* **Ratio Weighting Invariance:** Multi-day periodic aggregations must strictly weight daily percentages and averages by their true underlying base denominator (e.g., transaction counts for fees, total active coin supply for UTXO age bands).
+* **Calibrated Ingestion Ceilings:** Multi-year baseline ETL jobs scanning cumulative history (e.g. Bitcoin outputs) must set bounded but realistic ceilings (`2.5 TB`) to prevent false-rejection during datamart backfills.
 
 ---
 
