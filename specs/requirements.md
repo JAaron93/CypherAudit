@@ -1,8 +1,8 @@
 # Requirements Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.5.0  
+**Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
-**Traceability Base:** `specs/design.md` (v1.5.0)  
+**Traceability Base:** `specs/design.md` (v1.6.0)  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
@@ -60,6 +60,10 @@
 * **FR-5.3:** The notebooks shall render interactive publication-quality charts (Plotly) for HODL waves, fee-to-value drag curves, organic vs. bot waterfalls, and counterparty topology.
 * **FR-5.4:** The notebooks shall execute BigQuery data retrieval in dedicated data-loading cells with caching before executing downstream analytical cells.
 * **FR-5.5 (Automated Cloud & WASM Export Publishing):** The system shall provide an export workflow (`marimo export html-wasm --mode run`) to compile notebooks into standalone interactive web apps hosted on **GitHub Pages** / **molab** with 0 backend servers and $0.00 cost.
+
+### FR-6: Research Documentation & Architectural Transparency
+* **FR-6.1:** The system shall document empirical conclusions on 10+ years of Bitcoin and USDC data across all 5 research hypotheses in `README.md`.
+* **FR-6.2:** The `README.md` shall feature an end-to-end multi-layer architectural diagram clearly distinguishing the **Deterministic Layer** (Python/BigQuery/Security), **Cognitive Layer** (Gemini 3.7 Flash/Prompts), and **Interactive Layer** (Marimo/WASM).
 
 ---
 

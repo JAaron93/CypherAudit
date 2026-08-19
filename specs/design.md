@@ -1,6 +1,6 @@
 # Architectural Design Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.5.0  
+**Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
 **Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks (WASM / GitHub Pages / molab), Python 3.11+  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`) via `google-genai`  
@@ -73,39 +73,45 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
 
 ---
 
-## 3. End-to-End System Architecture
+## 3. Comprehensive Multi-Layer System Architecture
 
 ```
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
  │                      GOOGLE CLOUD SCHEDULED CRON (`0 0 1 * *` UTC)                     │
- │                  (Managed natively by GCP Cloud Scheduler / BigQuery)                  │
+ │                  (100% Serverless Cloud Scheduler / BigQuery Pipeline)                 │
  └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                              │
-                                             │ 1. Serverless MERGE INTO (< 25 GB Scanned)
+                                             │ Scoped Monthly MERGE INTO (< 25 GB)
                                              ▼
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
- │                      CURATED ANALYTICAL DATAMART (< 30 MB Total)                       │
- │                       (Dataset: `crypto_analytics_mart` in User GCP)                   │
- ├───────────────────────────────────────────┬────────────────────────────────────────────┤
- │ `btc_daily_utxo_distribution`             │ 2014–2026+ Daily UTXO age bands, micro-tx  │
- │                                           │ counts, fee drag.                          │
- ├───────────────────────────────────────────┼────────────────────────────────────────────┤
- │ `usdc_daily_organic_metrics`              │ 2018–2026+ Noise-filtered volume, organic  │
- │                                           │ counts, EOA vs contract volumes.           │
- └───────────────────────────────────────────┬────────────────────────────────────────────┘
-                                             │
-                       ┌─────────────────────┴─────────────────────┐
-                       │ 2. Trigger Post-Ingestion Analysis        │ 3. Runtime API Queries (<5MB)
-                       ▼                                           ▼
- ┌───────────────────────────────────────────┐ ┌──────────────────────────────────────────┐
- │    MARIMO CLOUD / WASM PUBLISHING PIPELINE │ │  uAGENTS / AGENTVERSE ANALYTICS ORACLE   │
- ├───────────────────────────────────────────┤ ├──────────────────────────────────────────┤
- │ • Automated `marimo export html-wasm`     │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │
- │ • Interactive UI (Plotly & LaTeX)         │ │ • Modular Instructions (`prompts/`)      │
- │ • Hosted on GitHub Pages / molab          │ │ • In-Memory Rate Limiter (Token Bucket)  │
- │ • Zero-Cost ($0.00), Instant Web Access   │ │ • BigQuery Client (`max_bytes=50MB`)     │
- │                                           │ │ • ASI Agentverse Mailbox & Almanac       │
- └───────────────────────────────────────────┘ └──────────────────────────────────────────┘
+ │                         CURATED DATAMART: `crypto_analytics_mart`                      │
+ │   • `btc_daily_utxo_distribution`: 2014–2026+ UTXO age bands & micro-tx density        │
+ │   • `usdc_daily_organic_metrics`: 2018–2026+ Noise-filtered organic volume & topology  │
+ └─────────────────────┬────────────────────────────────────────────────────┬─────────────┘
+                       │                                                    │
+                       │ Query Data (< 5 MB)                                │ Trigger Ingestion
+                       ▼                                                    ▼
+ ┌──────────────────────────────────────────────┐ ┌───────────────────────────────────────┐
+ │         DETERMINISTIC LAYER (Python)         │ │   MARIMO INTERACTIVE RESEARCH HUB     │
+ │ ├──────────────────────────────────────────┤ │ ├─────────────────────────────────────┤ │
+ │ │ • Parameterized SQL Client (`client.py`) │ │ │ • `notebooks/btc_analysis.py`       │ │
+ │ │ • 50 MB Hard Billing Cap (`COST-1`)      │ │ │ • `notebooks/usdc_analysis.py`      │ │
+ │ │ • In-Memory LRU Cache (0ms latency)      │ │ │ • LaTeX Hypotheses & Plotly Charts  │ │
+ │ │ • Token Bucket Rate Limiter (`5 req/min`)│ │ │ • `marimo export html-wasm`         │ │
+ │ │ • Pydantic v2 A2A Protocols (`uAgents`)  │ │ │ • Hosted on GitHub Pages & molab    │ │
+ │ └────────────────────┬─────────────────────┘ │ └─────────────────────────────────────┘ │
+ │                      │ Filtered Data Payload │                                         │
+ │                      ▼                       └─────────────────────────────────────────┘
+ │ ┌──────────────────────────────────────────┐                                            
+ │ │          COGNITIVE LAYER (Gemini)        │                                            
+ │ ├──────────────────────────────────────────┤                                            
+ │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │                                            
+ │ │ • Modular Prompt: `oracle_instructions.md`│                                           
+ │ │ • Empirical Macroeconomic Persona        │                                            
+ │ │ • Statistical Confidence Interpretations │                                            
+ │ │ • Mandatory Financial Disclaimers        │                                            
+ │ └──────────────────────────────────────────┘                                            
+ └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---

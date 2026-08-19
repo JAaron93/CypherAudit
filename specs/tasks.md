@@ -52,8 +52,6 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Traceability:** SEC-1, BDD-3.
 * **Artifacts:** `tests/test_security.py`.
 
-### Task 1.3: Security Layer Implementation [COMPLETED]
-* **Description:** Implement `src/agent/security/rate_limiter.py` (token bucket per `agent_address`) and `src/agent/security/circuit_breaker.py` (input sanitization, schema assertion, dynamic SQL blocking).
 ### Task 1.3: Security Circuit Breaker & Rate Limiter Implementation [COMPLETED]
 * **Description:** Implement `src/agent/security/rate_limiter.py` and `src/agent/security/circuit_breaker.py`.
 * **Dependencies:** Task 1.2.
@@ -162,6 +160,12 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Description:** Generate `README.md` and research documentation providing the complete empirical retrospective on 10+ years of Bitcoin and USDC data.
 * **Dependencies:** Task 6.1.
 * **Traceability:** US-1, US-2, US-3.
+* **Artifacts:** `README.md`.
+
+### Task 6.3: Comprehensive Multi-Layer Architecture & Pipeline Diagram in README.md
+* **Description:** Embed the comprehensive multi-layer architectural diagram into `README.md` clearly contrasting the Deterministic Layer, Cognitive Layer, Datamart Ingestion Pipeline, and Marimo Research Hub.
+* **Dependencies:** Task 6.2.
+* **Traceability:** FR-6.2, US-1, US-2.
 * **Artifacts:** `README.md`.
 
 ---

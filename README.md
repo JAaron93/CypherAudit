@@ -48,42 +48,53 @@ While several major institutions have researched crypto payment adoption, previo
 
 ---
 
-## 🏗️ Architecture: The Curated Datamart Pattern
+## 🏗️ Architecture: Multi-Layer Curated Datamart Pattern
 
-To enable high-speed queries for external agents while keeping Google Cloud query costs strictly at **$0.00/month** within GCP's Always-Free Tier (1 TB/month), CypherAudit decouples raw multi-terabyte scans from runtime queries:
+To enable high-speed queries for external agents while keeping Google Cloud query costs strictly at **$0.00/month** within GCP's Always-Free Tier (1 TB/month), CypherAudit decouples raw multi-terabyte scans from runtime queries across distinct deterministic and cognitive processing boundaries:
 
 ```
-                                  Agentverse User / External Agent
-                                                 │
-                                                 │ 1. Request (Natural Language or JSON-RPC)
-                                                 ▼
-                             ┌───────────────────────────────────────┐
-                             │       Security Hardening Layer        │
-                             │  • Token Bucket Rate Limiter          │
-                             │  • Input Validator & Circuit Breaker  │
-                             │  • In-Memory Result Cache (LRU)       │
-                             └───────────────────┬───────────────────┘
-                                                 │ (Cache Miss & Validated)
-                                                 ▼
-                             ┌───────────────────────────────────────┐
-                             │      uAgents / FastAPI Agent Core     │
-                             │  • Gemini Flash Intent & Param Parser │
-                             │  • Parameterized SQL Builder          │
-                             │  • BigQuery Client (50MB Hard Cap)    │
-                             └───────────────────┬───────────────────┘
-                                                 │
-                                                 │ 2. Scans < 5MB Data
-                                                 ▼
-                             ┌───────────────────────────────────────┐
-                             │    Curated Datamart (GCP BigQuery)    │
-                             │  • btc_daily_utxo_distribution        │
-                             │  • usdc_daily_organic_metrics         │
-                             │  • counterparty_topology_breakdown    │
-                             └───────────────────────────────────────┘
+ ┌────────────────────────────────────────────────────────────────────────────────────────┐
+ │                      GOOGLE CLOUD SCHEDULED CRON (`0 0 1 * *` UTC)                     │
+ │                  (100% Serverless Cloud Scheduler / BigQuery Pipeline)                 │
+ └───────────────────────────────────────────┬────────────────────────────────────────────┘
+                                             │
+                                             │ 1. Scoped Monthly MERGE INTO (< 25 GB Scanned)
+                                             ▼
+ ┌────────────────────────────────────────────────────────────────────────────────────────┐
+ │                         CURATED DATAMART: `crypto_analytics_mart`                      │
+ │   • `btc_daily_utxo_distribution`: 2014–2026+ UTXO age bands & micro-tx density        │
+ │   • `usdc_daily_organic_metrics`: 2018–2026+ Noise-filtered organic volume & topology  │
+ └─────────────────────┬────────────────────────────────────────────────────┬─────────────┘
+                       │                                                    │
+                       │ 2. Scans < 5 MB Curated Data                       │ Automated Refresh
+                       ▼                                                    ▼
+ ┌──────────────────────────────────────────────┐ ┌───────────────────────────────────────┐
+ │         DETERMINISTIC LAYER (Python)         │ │   MARIMO INTERACTIVE RESEARCH HUB     │
+ │ ├──────────────────────────────────────────┤ │ ├─────────────────────────────────────┤ │
+ │ │ • Parameterized SQL Client (`client.py`) │ │ │ • `notebooks/btc_analysis.py`       │ │
+ │ │ • 50 MB Hard Billing Cap (`COST-1`)      │ │ │ • `notebooks/usdc_analysis.py`      │ │
+ │ │ • In-Memory LRU Cache (0ms latency)      │ │ │ • LaTeX Hypotheses & Plotly Charts  │ │
+ │ │ • Token Bucket Rate Limiter (`5 req/min`)│ │ │ • `marimo export html-wasm`         │ │
+ │ │ • Pydantic v2 A2A Protocols (`uAgents`)  │ │ │ • Hosted on GitHub Pages & molab    │ │
+ │ └────────────────────┬─────────────────────┘ │ └─────────────────────────────────────┘ │
+ │                      │ Filtered Data Payload │                                         │
+ │                      ▼                       └─────────────────────────────────────────┘
+ │ ┌──────────────────────────────────────────┐                                            
+ │ │          COGNITIVE LAYER (Gemini)        │                                            
+ │ ├──────────────────────────────────────────┤                                            
+ │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │                                            
+ │ │ • Modular Prompt: `oracle_instructions.md`│                                           
+ │ │ • Empirical Macroeconomic Persona        │                                            
+ │ │ • Statistical Confidence Interpretations │                                            
+ │ │ • Mandatory Financial Disclaimers        │                                            
+ │ └──────────────────────────────────────────┘                                            
+ └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Batch ETL Pipeline (`src/bigquery/etl_pipelines.py`):** Runs once to aggregate 10+ years of raw Bitcoin and Ethereum logs into compact (<25 MB), date-partitioned datamart tables (`crypto_analytics_mart`).
-2. **SignalChain Oracle (`src/agent/`):** Answers runtime inquiries by querying only the compact summary datamart, scanning **< 5 MB per query** (< $0.00003).
+1. **Continuous Ingestion Cron:** Cloud Scheduler triggers BigQuery Scheduled Queries on the 1st of every month to merge new blockchain blocks into `crypto_analytics_mart` serverlessly.
+2. **Deterministic Layer (Python / `src/`):** Enforces hard limits, rate limiting, and parameter sanitization without LLM hallucinations.
+3. **Cognitive Layer (Gemini 3.7 Flash / `oracle_instructions.md`):** Interprets structured data payloads into rigorous macroeconomic narratives.
+4. **Interactive Research Hub (Marimo / WASM):** Renders reactive hypothesis models and Plotly visualizations published to GitHub Pages and molab at $0.00/mo.
 
 ---
 
