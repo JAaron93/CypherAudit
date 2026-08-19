@@ -144,20 +144,27 @@ filtered_transfers AS (
     t.from_address,
     t.to_address,
     t.amount_usd,
+    -- Flag bots and automated contract loops
     CASE 
       WHEN COALESCE(mwa.monthly_tx_count, 0) > 1000 THEN FALSE
       WHEN COALESCE(mwa.monthly_volume_usd, 0) > 10000000.0 THEN FALSE
+      WHEN from_kc.contract_address IS NOT NULL AND to_kc.contract_address IS NOT NULL THEN FALSE
       ELSE TRUE 
     END AS is_organic,
+    -- Flag micro / retail payments
     CASE WHEN t.amount_usd <= 500.0 THEN TRUE ELSE FALSE END AS is_retail,
-    CASE WHEN kc.contract_address IS NOT NULL THEN TRUE ELSE FALSE END AS is_to_contract
+    -- Flag contract counterparties
+    CASE WHEN from_kc.contract_address IS NOT NULL THEN TRUE ELSE FALSE END AS is_from_contract,
+    CASE WHEN to_kc.contract_address IS NOT NULL THEN TRUE ELSE FALSE END AS is_to_contract
   FROM
     usdc_transfers t
   LEFT JOIN
     monthly_wallet_activity mwa 
     ON t.from_address = mwa.from_address AND t.month_bucket = mwa.month_bucket
   LEFT JOIN
-    known_contracts kc ON t.to_address = kc.contract_address
+    known_contracts from_kc ON t.from_address = from_kc.contract_address
+  LEFT JOIN
+    known_contracts to_kc ON t.to_address = to_kc.contract_address
 )
 SELECT
   date,
@@ -167,8 +174,8 @@ SELECT
   SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END) AS organic_volume_usd,
   SAFE_DIVIDE(SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END), SUM(amount_usd)) AS organic_volume_ratio,
   SUM(CASE WHEN is_organic AND is_retail THEN amount_usd ELSE 0 END) AS retail_volume_under_500usd,
-  SUM(CASE WHEN is_organic AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
-  SUM(CASE WHEN is_organic AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd
+  SUM(CASE WHEN is_organic AND NOT is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
+  SUM(CASE WHEN is_organic AND (is_from_contract OR is_to_contract) THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd
 FROM
   filtered_transfers
 GROUP BY
@@ -302,17 +309,21 @@ USING (
       CASE 
         WHEN COALESCE(mwa.monthly_tx_count, 0) > 1000 THEN FALSE
         WHEN COALESCE(mwa.monthly_volume_usd, 0) > 10000000.0 THEN FALSE
+        WHEN from_kc.contract_address IS NOT NULL AND to_kc.contract_address IS NOT NULL THEN FALSE
         ELSE TRUE 
       END AS is_organic,
       CASE WHEN t.amount_usd <= 500.0 THEN TRUE ELSE FALSE END AS is_retail,
-      CASE WHEN kc.contract_address IS NOT NULL THEN TRUE ELSE FALSE END AS is_to_contract
+      CASE WHEN from_kc.contract_address IS NOT NULL THEN TRUE ELSE FALSE END AS is_from_contract,
+      CASE WHEN to_kc.contract_address IS NOT NULL THEN TRUE ELSE FALSE END AS is_to_contract
     FROM
       usdc_transfers t
     LEFT JOIN
       monthly_wallet_activity mwa 
       ON t.from_address = mwa.from_address AND t.month_bucket = mwa.month_bucket
     LEFT JOIN
-      known_contracts kc ON t.to_address = kc.contract_address
+      known_contracts from_kc ON t.from_address = from_kc.contract_address
+    LEFT JOIN
+      known_contracts to_kc ON t.to_address = to_kc.contract_address
   )
   SELECT
     date,
@@ -322,8 +333,8 @@ USING (
     SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END) AS organic_volume_usd,
     SAFE_DIVIDE(SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END), SUM(amount_usd)) AS organic_volume_ratio,
     SUM(CASE WHEN is_organic AND is_retail THEN amount_usd ELSE 0 END) AS retail_volume_under_500usd,
-    SUM(CASE WHEN is_organic AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
-    SUM(CASE WHEN is_organic AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd
+    SUM(CASE WHEN is_organic AND NOT is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
+    SUM(CASE WHEN is_organic AND (is_from_contract OR is_to_contract) THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd
   FROM
     filtered_transfers
   GROUP BY
@@ -356,7 +367,7 @@ def run_etl_pipeline(
     dataset_id: str = "crypto_analytics_mart",
     start_date: str = "2014-01-01",
     end_date: str = "2026-01-01",
-    max_bytes_billed: int = 50_000_000,
+    max_bytes_billed: int = 500_000_000_000,  # 500 GB ceiling for multi-year baseline batch
     dry_run: bool = False,
 ):
     """Executes or dry-runs the baseline BigQuery Batch ETL pipeline (2014–2026)."""

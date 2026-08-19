@@ -91,6 +91,49 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][1]["period"] == "2025-02"
             assert res["data_points"][1]["organic_volume_pct"] == 25.0
 
+    def test_granularity_aggregation_btc_microtransactions_weighted_fee(self):
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_instance = MagicMock()
+            mock_bq.return_value = mock_instance
+
+            # Day 1: 100 txs with $1.00 fee; Day 2: 900 txs with $5.00 fee
+            # Weighted average fee = (100*1.0 + 900*5.0) / 1000 = 4.60
+            mock_rows = [
+                {
+                    "date": "2025-01-01",
+                    "micro_tx_count_under_10usd": 50,
+                    "retail_tx_count_10_to_500usd": 30,
+                    "whale_tx_count_over_50kusd": 20,
+                    "avg_fee_usd": 1.0,
+                },
+                {
+                    "date": "2025-01-02",
+                    "micro_tx_count_under_10usd": 450,
+                    "retail_tx_count_10_to_500usd": 270,
+                    "whale_tx_count_over_50kusd": 180,
+                    "avg_fee_usd": 5.0,
+                },
+            ]
+            mock_query_job = MagicMock()
+            mock_query_job.result.return_value = mock_rows
+            mock_query_job.total_bytes_billed = 1048576
+            mock_instance.query.return_value = mock_query_job
+
+            client = BigQueryAnalyticsClient(project_id="test-project")
+            res = client.execute_analytics_query(
+                query_type="btc_microtransactions",
+                start_date="2025-01-01",
+                end_date="2025-01-31",
+                granularity="monthly",
+            )
+
+            assert res["status"] == "SUCCESS"
+            assert len(res["data_points"]) == 1
+            assert res["data_points"][0]["period"] == "2025-01"
+            assert res["data_points"][0]["total_classified_txs"] == 1000
+            assert res["data_points"][0]["avg_fee_usd"] == 4.60
+            assert res["data_points"][0]["fee_drag_pct_on_10usd_purchase"] == 46.0
+
     def test_byte_limit_exceeded_handled_gracefully(self):
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()

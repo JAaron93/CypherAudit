@@ -148,9 +148,19 @@ class BigQueryAnalyticsClient:
                 agg_row["pct_microtransactions"] = round(micro * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
                 agg_row["pct_retail_commerce"] = round(retail * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
                 agg_row["pct_whale_institutional"] = round(whale * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
-                avg_fee = round(sum(float(r.get("avg_fee_usd", 0.0)) for r in rows) / n, 2)
-                agg_row["avg_fee_usd"] = avg_fee
-                agg_row["fee_drag_pct_on_10usd_purchase"] = round(avg_fee / 10.0 * 100.0, 2)
+                if total_txs > 0:
+                    weighted_fee = sum(
+                        float(r.get("avg_fee_usd", 0.0)) * (
+                            int(r.get("micro_tx_count_under_10usd", 0))
+                            + int(r.get("retail_tx_count_10_to_500usd", 0))
+                            + int(r.get("whale_tx_count_over_50kusd", 0))
+                        )
+                        for r in rows
+                    ) / total_txs
+                    agg_row["avg_fee_usd"] = round(weighted_fee, 2)
+                else:
+                    agg_row["avg_fee_usd"] = round(sum(float(r.get("avg_fee_usd", 0.0)) for r in rows) / n, 2)
+                agg_row["fee_drag_pct_on_10usd_purchase"] = round(agg_row["avg_fee_usd"] / 10.0 * 100.0, 2)
 
             elif query_type == "usdc_organic_volume":
                 raw_count = int(sum_field("raw_transfer_count"))
