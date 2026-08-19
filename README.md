@@ -139,9 +139,10 @@ class AnalyticsQueryResponse(BaseModel):
 ```
 CypherAudit/
 ├── specs/
-│   ├── design.md              # Architectural design & literature gap analysis
-│   ├── requirements.md        # Functional, security & BDD requirements
-│   └── tasks.md               # Test-driven implementation plan
+│   └── foundation-spec/
+│       ├── design.md          # Architectural design & literature gap analysis
+│       ├── requirements.md    # Functional, security & BDD requirements
+│       └── tasks.md           # Test-driven implementation plan
 ├── src/
 │   ├── agent/
 │   │   ├── main.py            # uAgents daemon & Agentverse registration

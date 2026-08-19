@@ -2,7 +2,7 @@
 
 **Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
-**Traceability Base:** `specs/design.md` (v1.6.0)  
+**Traceability Base:** `specs/foundation-spec/design.md` (v1.6.0)  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
