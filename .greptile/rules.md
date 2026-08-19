@@ -4,9 +4,10 @@
 - **Cost Guardrails & BigQuery Safety:** Every BigQuery query job configuration MUST enforce `maximum_bytes_billed` (default 50 MB ceiling). Full unpartitioned table scans against raw public blockchain datasets without byte ceilings must be flagged as critical severity.
 - **Zero Dynamic SQL / Injection Defense:** SQL queries must strictly use parameterized queries (`google.cloud.bigquery.ScalarQueryParameter`). Never permit dynamic f-string formatting or string concatenation in SQL execution paths.
 - **Defense-in-Depth Security:** All incoming user inputs (dates, query types, granularities) must pass through `SecurityCircuitBreaker` and `TokenBucketRateLimiter` before initiating cloud I/O.
+- **Cryptographic Identity Isolation:** Never provide public fallback strings for cryptographic seed variables (`AGENT_SEED`). Missing seeds must raise an explicit exception to prevent identity collision and address impersonation.
 
 ## 2. Code Quality & Typing Standards
-- **Strict Typing:** All Python functions, methods, and classes must include explicit type hints.
+- **Strict Typing:** All Python functions, methods, event handlers (`ctx: Context`), and test cases (`-> None`) must include explicit parameter and return type hints.
 - **Pydantic v2 Models:** Protocol message models must inherit from `pydantic.BaseModel` with explicit field definitions and descriptions.
 - **Async Non-Blocking Execution:** Agent protocols and message handlers must use `async`/`await` non-blocking patterns.
 
