@@ -2,13 +2,15 @@
 
 Provides safe, cost-bounded execution against the curated datamart:
 - Hard byte limit per query (maximum_bytes_billed = 50 MB)
-- Strict type-safe query parameterization
+- Strict type-safe query parameterization and identifier validation
 - In-memory thread-safe LRU caching with TTL
+- True multi-granularity time series aggregation (daily, monthly, yearly)
 """
 
 import os
+import re
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -18,6 +20,13 @@ from google.cloud import bigquery
 class BigQueryExecutionError(Exception):
     """Raised when BigQuery query execution fails or violates cost limits."""
     pass
+
+
+def validate_identifier(name: str, param_name: str) -> str:
+    """Validates that a SQL identifier contains only alphanumeric and safe characters."""
+    if not isinstance(name, str) or not re.match(r"^[a-zA-Z0-9_\-\.]+$", name):
+        raise BigQueryExecutionError(f"Invalid SQL identifier for {param_name}: '{name}'")
+    return name
 
 
 class LRUCache:
@@ -63,12 +72,14 @@ class BigQueryAnalyticsClient:
         self,
         project_id: str | None = None,
         dataset_id: str = "crypto_analytics_mart",
-        max_bytes_billed: int = 50_000_000, # 50 MB cap
+        max_bytes_billed: int = 50_000_000,  # 50 MB cap
         cache_capacity: int = 500,
         cache_ttl_seconds: int = 86400,
     ):
-        self.project_id = project_id or os.getenv("GCP_PROJECT_ID", "your-gcp-project-id")
-        self.dataset_id = dataset_id or os.getenv("BIGQUERY_DATASET", "crypto_analytics_mart")
+        raw_project = project_id or os.getenv("GCP_PROJECT_ID", "your-gcp-project-id")
+        raw_dataset = dataset_id or os.getenv("BIGQUERY_DATASET", "crypto_analytics_mart")
+        self.project_id = validate_identifier(raw_project, "project_id")
+        self.dataset_id = validate_identifier(raw_dataset, "dataset_id")
         self.max_bytes_billed = int(os.getenv("BIGQUERY_MAX_BYTES_BILLED", max_bytes_billed))
         self.cache = LRUCache(capacity=cache_capacity, ttl_seconds=cache_ttl_seconds)
         self.sql_dir = Path(__file__).parent / "sql_queries"
@@ -82,7 +93,7 @@ class BigQueryAnalyticsClient:
         return self._bq_client
 
     def _load_sql_template(self, query_type: str) -> str:
-        """Loads SQL file from templates directory."""
+        """Loads and safely binds SQL file from templates directory."""
         if query_type not in self.TEMPLATE_MAP:
             raise BigQueryExecutionError(f"No SQL template registered for query_type: {query_type}")
         file_path = self.sql_dir / self.TEMPLATE_MAP[query_type]
@@ -90,6 +101,36 @@ class BigQueryAnalyticsClient:
             raise BigQueryExecutionError(f"SQL file not found at: {file_path}")
         raw_sql = file_path.read_text(encoding="utf-8")
         return raw_sql.replace("{{project_id}}", self.project_id).replace("{{dataset_id}}", self.dataset_id)
+
+    def _aggregate_granularity(self, results: list[dict[str, Any]], granularity: str) -> list[dict[str, Any]]:
+        """Aggregates daily records into monthly or yearly summaries."""
+        if not results or granularity == "daily":
+            return results
+
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in results:
+            date_val = str(row.get("date", ""))
+            period_key = date_val[:7] if granularity == "monthly" else date_val[:4]
+            grouped[period_key].append(row)
+
+        aggregated = []
+        for period, rows in sorted(grouped.items()):
+            n = len(rows)
+            agg_row: dict[str, Any] = {"period": period, "observation_count": n}
+            # Collect numeric keys
+            for key in rows[0].keys():
+                if key in {"date", "period"}:
+                    continue
+                vals = [r[key] for r in rows if r.get(key) is not None and isinstance(r.get(key), (int, float))]
+                if not vals:
+                    continue
+                if any(substr in key for substr in ["pct", "ratio", "avg", "drag", "band"]):
+                    agg_row[key] = round(sum(vals) / len(vals), 2)
+                else:
+                    agg_row[key] = round(sum(vals), 2) if isinstance(vals[0], float) else sum(vals)
+            aggregated.append(agg_row)
+
+        return aggregated
 
     def execute_analytics_query(
         self,
@@ -122,7 +163,8 @@ class BigQueryAnalyticsClient:
 
         try:
             query_job = self.client.query(raw_sql, job_config=job_config)
-            results = [dict(row) for row in query_job.result()]
+            raw_results = [dict(row) for row in query_job.result()]
+            results = self._aggregate_granularity(raw_results, granularity)
             bytes_scanned_mb = float(query_job.total_bytes_billed or 0) / (1024 * 1024)
 
             summary = self._generate_empirical_summary(query_type, results)
@@ -156,17 +198,18 @@ class BigQueryAnalyticsClient:
             return "No data points returned for the specified date range."
 
         count = len(results)
+        last_point = results[-1]
+        period_label = last_point.get("date") or last_point.get("period")
+
         if query_type == "btc_hodl_waves":
-            last_point = results[-1]
             dormant = last_point.get("pct_dormant_supply_over_1y", "N/A")
             over_2y = last_point.get("pct_over_2y", "N/A")
             return (
-                f"Across {count} daily observations, as of {last_point.get('date')}, "
+                f"Across {count} observations, as of {period_label}, "
                 f"{dormant}% of Bitcoin's total supply has remained dormant for over 1 year "
                 f"({over_2y}% for >2 years), strongly validating the Store-of-Value accumulation thesis."
             )
         elif query_type == "btc_microtransactions":
-            last_point = results[-1]
             micro_pct = last_point.get("pct_microtransactions", "N/A")
             fee_drag = last_point.get("fee_drag_pct_on_10usd_purchase", "N/A")
             return (
@@ -175,7 +218,6 @@ class BigQueryAnalyticsClient:
                 f"fees remain a structural economic deterrent to everyday point-of-sale commerce."
             )
         elif query_type == "usdc_organic_volume":
-            last_point = results[-1]
             organic_pct = last_point.get("organic_volume_pct", "N/A")
             noise_pct = last_point.get("automated_noise_pct", "N/A")
             return (
@@ -183,7 +225,6 @@ class BigQueryAnalyticsClient:
                 f"activity. Organic commerce volume represents {organic_pct}% of total throughput."
             )
         elif query_type == "usdc_eoa_topology":
-            last_point = results[-1]
             p2p_pct = last_point.get("pct_p2p_merchant_commerce", "N/A")
             defi_pct = last_point.get("pct_defi_smart_contract", "N/A")
             return (

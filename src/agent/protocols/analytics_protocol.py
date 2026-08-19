@@ -1,5 +1,6 @@
 """uAgents Protocol Definition and Message Models for SignalChain Oracle."""
 
+import asyncio
 from typing import Any
 from pydantic import BaseModel, Field
 
@@ -86,7 +87,8 @@ def create_analytics_protocol(bigquery_client, rate_limiter, circuit_breaker):
 
         # 3. BigQuery Execution
         try:
-            result = bigquery_client.execute_analytics_query(
+            result = await asyncio.to_thread(
+                bigquery_client.execute_analytics_query,
                 query_type=params["query_type"],
                 start_date=params["start_date"],
                 end_date=params["end_date"],
