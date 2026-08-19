@@ -95,12 +95,14 @@ CypherAudit/
 │   ├── config.json                    # Greptile review settings
 │   └── rules.md                       # Greptile code review guidelines
 ├── specs/
-│   ├── design.md                      # System architecture & mathematical formulations (v1.4.0)
-│   ├── requirements.md                # Functional requirements & BDD acceptance tests (v1.4.0)
-│   └── tasks.md                       # Modular execution tracks & task list (v1.4.0)
+│   ├── design.md                      # System architecture & mathematical formulations (v1.6.0)
+│   ├── requirements.md                # Functional requirements & BDD acceptance tests (v1.6.0)
+│   └── tasks.md                       # Modular execution tracks & task list (v1.6.0)
 ├── src/
 │   ├── agent/
 │   │   ├── main.py                    # uAgent main entrypoint & Agentverse registration
+│   │   ├── prompts/
+│   │   │   └── oracle_instructions.md # Decoupled Oracle research persona & synthesis prompt
 │   │   ├── protocols/
 │   │   │   └── analytics_protocol.py  # Pydantic v2 request/response protocol
 │   │   └── security/

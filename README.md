@@ -145,6 +145,8 @@ CypherAudit/
 ├── src/
 │   ├── agent/
 │   │   ├── main.py            # uAgents daemon & Agentverse registration
+│   │   ├── prompts/
+│   │   │   └── oracle_instructions.md # Decoupled Oracle research persona & synthesis prompt
 │   │   ├── protocols/         # Message schemas & protocol handlers
 │   │   └── security/          # Rate limiters & circuit breaker guardrails
 │   ├── bigquery/
