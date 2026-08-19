@@ -43,13 +43,49 @@ CREATE OR REPLACE TABLE `{project_id}.{dataset_id}.btc_daily_utxo_distribution`
 PARTITION BY date
 CLUSTER BY date
 AS
-WITH raw_transactions AS (
+WITH daily_snapshots AS (
+  SELECT day AS date
+  FROM UNNEST(GENERATE_DATE_ARRAY(DATE('{start_date}'), DATE('{end_date}'), INTERVAL 1 DAY)) AS day
+),
+active_outputs AS (
+  SELECT
+    o.tx_hash,
+    o.block_timestamp,
+    o.spent_block_timestamp,
+    o.value / 1e8 AS btc_value,
+    DATE(o.block_timestamp) AS creation_date,
+    COALESCE(DATE(o.spent_block_timestamp), DATE('9999-12-31')) AS spent_date
+  FROM
+    `bigquery-public-data.crypto_bitcoin.outputs` o
+  WHERE
+    DATE(o.block_timestamp) <= '{end_date}'
+    AND (o.spent_block_timestamp IS NULL OR DATE(o.spent_block_timestamp) >= '{start_date}')
+),
+daily_utxo_state AS (
+  SELECT
+    d.date,
+    COUNT(1) AS total_active_utxos,
+    SUM(u.btc_value) AS total_unspent_btc,
+    ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) < 1 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_under_1d,
+    ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 1 AND DATE_DIFF(d.date, u.creation_date, DAY) < 7 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1d_to_1w,
+    ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 7 AND DATE_DIFF(d.date, u.creation_date, DAY) < 30 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1w_to_1m,
+    ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 30 AND DATE_DIFF(d.date, u.creation_date, DAY) < 180 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1m_to_6m,
+    ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 180 AND DATE_DIFF(d.date, u.creation_date, DAY) < 365 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_6m_to_1y,
+    ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 365 AND DATE_DIFF(d.date, u.creation_date, DAY) < 730 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1y_to_2y,
+    ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 730 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_over_2y
+  FROM
+    daily_snapshots d
+  INNER JOIN
+    active_outputs u
+    ON u.creation_date <= d.date AND u.spent_date > d.date
+  GROUP BY
+    d.date
+),
+raw_transactions AS (
   SELECT
     DATE(block_timestamp) AS date,
-    block_timestamp,
     tx.hash AS tx_hash,
     tx.fee / 1e8 * 65000.0 AS fee_usd,
-    tx.inputs,
     tx.outputs
   FROM
     `bigquery-public-data.crypto_bitcoin.transactions` tx
@@ -57,28 +93,7 @@ WITH raw_transactions AS (
     DATE(block_timestamp) >= '{start_date}'
     AND DATE(block_timestamp) <= '{end_date}'
 ),
-flattened_inputs AS (
-  SELECT
-    t.date,
-    t.tx_hash,
-    TIMESTAMP_DIFF(t.block_timestamp, inp.spent_block_timestamp, DAY) AS age_days
-  FROM
-    raw_transactions t,
-    UNNEST(t.inputs) inp
-  WHERE
-    inp.spent_block_timestamp IS NOT NULL
-),
-daily_age_bands AS (
-  SELECT
-    date,
-    tx_hash,
-    AVG(age_days) AS avg_input_age_days
-  FROM
-    flattened_inputs
-  GROUP BY
-    date, tx_hash
-),
-flattened_outputs AS (
+flattened_tx_outputs AS (
   SELECT
     t.date,
     t.tx_hash,
@@ -90,34 +105,23 @@ flattened_outputs AS (
 ),
 classified_transactions AS (
   SELECT
-    o.date,
-    o.tx_hash,
-    o.fee_usd,
-    COALESCE(a.avg_input_age_days, 0) AS age_days,
-    SUM(o.output_usd) AS total_tx_usd,
-    CASE WHEN SUM(o.output_usd) < 10.0 THEN 'micro'
-         WHEN SUM(o.output_usd) BETWEEN 10.0 AND 500.0 THEN 'retail'
-         WHEN SUM(o.output_usd) > 50000.0 THEN 'whale'
+    date,
+    tx_hash,
+    fee_usd,
+    SUM(output_usd) AS total_tx_usd,
+    CASE WHEN SUM(output_usd) < 10.0 THEN 'micro'
+         WHEN SUM(output_usd) BETWEEN 10.0 AND 500.0 THEN 'retail'
+         WHEN SUM(output_usd) > 50000.0 THEN 'whale'
          ELSE 'mid' END AS size_class
   FROM
-    flattened_outputs o
-  LEFT JOIN
-    daily_age_bands a ON o.tx_hash = a.tx_hash AND o.date = a.date
+    flattened_tx_outputs
   GROUP BY
-    o.date, o.tx_hash, o.fee_usd, a.avg_input_age_days
+    date, tx_hash, fee_usd
 ),
-daily_metrics AS (
+daily_tx_metrics AS (
   SELECT
     date,
-    COUNT(DISTINCT tx_hash) AS total_active_utxos,
     COUNT(DISTINCT tx_hash) AS total_tx_count,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days < 1), COUNT(1)), 4) AS band_under_1d,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 1 AND age_days < 7), COUNT(1)), 4) AS band_1d_to_1w,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 7 AND age_days < 30), COUNT(1)), 4) AS band_1w_to_1m,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 30 AND age_days < 180), COUNT(1)), 4) AS band_1m_to_6m,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 180 AND age_days < 365), COUNT(1)), 4) AS band_6m_to_1y,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 365 AND age_days < 730), COUNT(1)), 4) AS band_1y_to_2y,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 730), COUNT(1)), 4) AS band_over_2y,
     COUNTIF(size_class = 'micro') AS micro_tx_count_under_10usd,
     COUNTIF(size_class = 'retail') AS retail_tx_count_10_to_500usd,
     COUNTIF(size_class = 'whale') AS whale_tx_count_over_50kusd,
@@ -127,7 +131,25 @@ daily_metrics AS (
   GROUP BY
     date
 )
-SELECT * FROM daily_metrics;
+SELECT
+  u.date,
+  COALESCE(u.total_active_utxos, 0) AS total_active_utxos,
+  COALESCE(t.total_tx_count, 0) AS total_tx_count,
+  COALESCE(u.band_under_1d, 0.0) AS band_under_1d,
+  COALESCE(u.band_1d_to_1w, 0.0) AS band_1d_to_1w,
+  COALESCE(u.band_1w_to_1m, 0.0) AS band_1w_to_1m,
+  COALESCE(u.band_1m_to_6m, 0.0) AS band_1m_to_6m,
+  COALESCE(u.band_6m_to_1y, 0.0) AS band_6m_to_1y,
+  COALESCE(u.band_1y_to_2y, 0.0) AS band_1y_to_2y,
+  COALESCE(u.band_over_2y, 0.0) AS band_over_2y,
+  COALESCE(t.micro_tx_count_under_10usd, 0) AS micro_tx_count_under_10usd,
+  COALESCE(t.retail_tx_count_10_to_500usd, 0) AS retail_tx_count_10_to_500usd,
+  COALESCE(t.whale_tx_count_over_50kusd, 0) AS whale_tx_count_over_50kusd,
+  COALESCE(t.avg_fee_usd, 0.0) AS avg_fee_usd
+FROM
+  daily_utxo_state u
+LEFT JOIN
+  daily_tx_metrics t ON u.date = t.date;
 """
 
 # DDL and ETL for USDC Datamart (Baseline)
@@ -214,13 +236,49 @@ FROM
 BTC_MONTHLY_MERGE_SQL = """
 MERGE `{project_id}.{dataset_id}.btc_daily_utxo_distribution` T
 USING (
-  WITH raw_transactions AS (
+  WITH daily_snapshots AS (
+    SELECT day AS date
+    FROM UNNEST(GENERATE_DATE_ARRAY(DATE('{start_date}'), DATE('{end_date}'), INTERVAL 1 DAY)) AS day
+  ),
+  active_outputs AS (
+    SELECT
+      o.tx_hash,
+      o.block_timestamp,
+      o.spent_block_timestamp,
+      o.value / 1e8 AS btc_value,
+      DATE(o.block_timestamp) AS creation_date,
+      COALESCE(DATE(o.spent_block_timestamp), DATE('9999-12-31')) AS spent_date
+    FROM
+      `bigquery-public-data.crypto_bitcoin.outputs` o
+    WHERE
+      DATE(o.block_timestamp) <= '{end_date}'
+      AND (o.spent_block_timestamp IS NULL OR DATE(o.spent_block_timestamp) >= '{start_date}')
+  ),
+  daily_utxo_state AS (
+    SELECT
+      d.date,
+      COUNT(1) AS total_active_utxos,
+      SUM(u.btc_value) AS total_unspent_btc,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) < 1 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_under_1d,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 1 AND DATE_DIFF(d.date, u.creation_date, DAY) < 7 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1d_to_1w,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 7 AND DATE_DIFF(d.date, u.creation_date, DAY) < 30 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1w_to_1m,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 30 AND DATE_DIFF(d.date, u.creation_date, DAY) < 180 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1m_to_6m,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 180 AND DATE_DIFF(d.date, u.creation_date, DAY) < 365 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_6m_to_1y,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 365 AND DATE_DIFF(d.date, u.creation_date, DAY) < 730 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1y_to_2y,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 730 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_over_2y
+    FROM
+      daily_snapshots d
+    INNER JOIN
+      active_outputs u
+      ON u.creation_date <= d.date AND u.spent_date > d.date
+    GROUP BY
+      d.date
+  ),
+  raw_transactions AS (
     SELECT
       DATE(block_timestamp) AS date,
-      block_timestamp,
       tx.hash AS tx_hash,
       tx.fee / 1e8 * 65000.0 AS fee_usd,
-      tx.inputs,
       tx.outputs
     FROM
       `bigquery-public-data.crypto_bitcoin.transactions` tx
@@ -228,75 +286,63 @@ USING (
       DATE(block_timestamp) >= '{start_date}'
       AND DATE(block_timestamp) <= '{end_date}'
   ),
-  flattened_inputs AS (
+  flattened_tx_outputs AS (
     SELECT
       t.date,
       t.tx_hash,
-      TIMESTAMP_DIFF(t.block_timestamp, inp.spent_block_timestamp, DAY) AS age_days
-  FROM
-    raw_transactions t,
-    UNNEST(t.inputs) inp
-  WHERE
-    inp.spent_block_timestamp IS NOT NULL
-),
-daily_age_bands AS (
+      t.fee_usd,
+      out.value / 1e8 * 65000.0 AS output_usd
+    FROM
+      raw_transactions t,
+      UNNEST(t.outputs) out
+  ),
+  classified_transactions AS (
+    SELECT
+      date,
+      tx_hash,
+      fee_usd,
+      SUM(output_usd) AS total_tx_usd,
+      CASE WHEN SUM(output_usd) < 10.0 THEN 'micro'
+           WHEN SUM(output_usd) BETWEEN 10.0 AND 500.0 THEN 'retail'
+           WHEN SUM(output_usd) > 50000.0 THEN 'whale'
+           ELSE 'mid' END AS size_class
+    FROM
+      flattened_tx_outputs
+    GROUP BY
+      date, tx_hash, fee_usd
+  ),
+  daily_tx_metrics AS (
+    SELECT
+      date,
+      COUNT(DISTINCT tx_hash) AS total_tx_count,
+      COUNTIF(size_class = 'micro') AS micro_tx_count_under_10usd,
+      COUNTIF(size_class = 'retail') AS retail_tx_count_10_to_500usd,
+      COUNTIF(size_class = 'whale') AS whale_tx_count_over_50kusd,
+      AVG(fee_usd) AS avg_fee_usd
+    FROM
+      classified_transactions
+    GROUP BY
+      date
+  )
   SELECT
-    date,
-    tx_hash,
-    AVG(age_days) AS avg_input_age_days
+    u.date,
+    COALESCE(u.total_active_utxos, 0) AS total_active_utxos,
+    COALESCE(t.total_tx_count, 0) AS total_tx_count,
+    COALESCE(u.band_under_1d, 0.0) AS band_under_1d,
+    COALESCE(u.band_1d_to_1w, 0.0) AS band_1d_to_1w,
+    COALESCE(u.band_1w_to_1m, 0.0) AS band_1w_to_1m,
+    COALESCE(u.band_1m_to_6m, 0.0) AS band_1m_to_6m,
+    COALESCE(u.band_6m_to_1y, 0.0) AS band_6m_to_1y,
+    COALESCE(u.band_1y_to_2y, 0.0) AS band_1y_to_2y,
+    COALESCE(u.band_over_2y, 0.0) AS band_over_2y,
+    COALESCE(t.micro_tx_count_under_10usd, 0) AS micro_tx_count_under_10usd,
+    COALESCE(t.retail_tx_count_10_to_500usd, 0) AS retail_tx_count_10_to_500usd,
+    COALESCE(t.whale_tx_count_over_50kusd, 0) AS whale_tx_count_over_50kusd,
+    COALESCE(t.avg_fee_usd, 0.0) AS avg_fee_usd
   FROM
-    flattened_inputs
-  GROUP BY
-    date, tx_hash
-),
-flattened_outputs AS (
-  SELECT
-    t.date,
-    t.tx_hash,
-    t.fee_usd,
-    out.value / 1e8 * 65000.0 AS output_usd
-  FROM
-    raw_transactions t,
-    UNNEST(t.outputs) out
-),
-classified_transactions AS (
-  SELECT
-    o.date,
-    o.tx_hash,
-    o.fee_usd,
-    COALESCE(a.avg_input_age_days, 0) AS age_days,
-    SUM(o.output_usd) AS total_tx_usd,
-    CASE WHEN SUM(o.output_usd) < 10.0 THEN 'micro'
-         WHEN SUM(o.output_usd) BETWEEN 10.0 AND 500.0 THEN 'retail'
-         WHEN SUM(o.output_usd) > 50000.0 THEN 'whale'
-         ELSE 'mid' END AS size_class
-  FROM
-    flattened_outputs o
+    daily_utxo_state u
   LEFT JOIN
-    daily_age_bands a ON o.tx_hash = a.tx_hash AND o.date = a.date
-  GROUP BY
-    o.date, o.tx_hash, o.fee_usd, a.avg_input_age_days
-),
-daily_metrics AS (
-  SELECT
-    date,
-    COUNT(DISTINCT tx_hash) AS total_active_utxos,
-    COUNT(DISTINCT tx_hash) AS total_tx_count,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days < 1), COUNT(1)), 4) AS band_under_1d,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 1 AND age_days < 7), COUNT(1)), 4) AS band_1d_to_1w,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 7 AND age_days < 30), COUNT(1)), 4) AS band_1w_to_1m,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 30 AND age_days < 180), COUNT(1)), 4) AS band_1m_to_6m,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 180 AND age_days < 365), COUNT(1)), 4) AS band_6m_to_1y,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 365 AND age_days < 730), COUNT(1)), 4) AS band_1y_to_2y,
-    ROUND(SAFE_DIVIDE(COUNTIF(age_days >= 730), COUNT(1)), 4) AS band_over_2y,
-    COUNTIF(size_class = 'micro') AS micro_tx_count_under_10usd,
-    COUNTIF(size_class = 'retail') AS retail_tx_count_10_to_500usd,
-    COUNTIF(size_class = 'whale') AS whale_tx_count_over_50kusd,
-    AVG(fee_usd) AS avg_fee_usd
-  FROM
-    classified_transactions
-  GROUP BY
-    date
+    daily_tx_metrics t ON u.date = t.date
 ) S
 ON T.date = S.date
 WHEN MATCHED THEN UPDATE SET
