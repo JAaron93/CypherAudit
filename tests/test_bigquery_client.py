@@ -91,6 +91,60 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][1]["period"] == "2025-02"
             assert res["data_points"][1]["organic_volume_pct"] == 25.0
 
+    def test_granularity_aggregation_btc_hodl_waves_supply_weighted(self):
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_instance = MagicMock()
+            mock_bq.return_value = mock_instance
+
+            # Day 1: 10,000 UTXOs with 100 BTC supply, 10% under 1d (10 BTC)
+            # Day 2: 1,000 UTXOs with 900 BTC supply, 50% under 1d (450 BTC)
+            # Total Supply = 1000 BTC. Weighted % under 1d = (100*10 + 900*50) / 1000 = 46.0%
+            mock_rows = [
+                {
+                    "date": "2025-01-01",
+                    "total_active_utxos": 10000,
+                    "total_active_btc_supply": 100.0,
+                    "pct_under_1d": 10.0,
+                    "pct_1d_to_1w": 20.0,
+                    "pct_1w_to_1m": 20.0,
+                    "pct_1m_to_6m": 20.0,
+                    "pct_6m_to_1y": 10.0,
+                    "pct_1y_to_2y": 10.0,
+                    "pct_over_2y": 10.0,
+                },
+                {
+                    "date": "2025-01-15",
+                    "total_active_utxos": 1000,
+                    "total_active_btc_supply": 900.0,
+                    "pct_under_1d": 50.0,
+                    "pct_1d_to_1w": 10.0,
+                    "pct_1w_to_1m": 10.0,
+                    "pct_1m_to_6m": 10.0,
+                    "pct_6m_to_1y": 10.0,
+                    "pct_1y_to_2y": 5.0,
+                    "pct_over_2y": 5.0,
+                },
+            ]
+            mock_query_job = MagicMock()
+            mock_query_job.result.return_value = mock_rows
+            mock_query_job.total_bytes_billed = 1048576
+            mock_instance.query.return_value = mock_query_job
+
+            client = BigQueryAnalyticsClient(project_id="test-project")
+            res = client.execute_analytics_query(
+                query_type="btc_hodl_waves",
+                start_date="2025-01-01",
+                end_date="2025-01-31",
+                granularity="monthly",
+            )
+
+            assert res["status"] == "SUCCESS"
+            assert len(res["data_points"]) == 1
+            assert res["data_points"][0]["period"] == "2025-01"
+            assert res["data_points"][0]["total_active_utxos"] == 11000
+            assert res["data_points"][0]["pct_under_1d"] == 46.0  # (100*10 + 900*50)/1000
+            assert res["data_points"][0]["pct_dormant_supply_over_1y"] == 11.0  # (100*20 + 900*10)/1000
+
     def test_granularity_aggregation_btc_microtransactions_weighted_fee(self):
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()

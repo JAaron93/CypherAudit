@@ -126,10 +126,16 @@ class BigQueryAnalyticsClient:
 
             if query_type == "btc_hodl_waves":
                 total_utxos = sum_field("total_active_utxos")
+                total_btc_supply = sum_field("total_active_btc_supply")
                 agg_row["total_active_utxos"] = int(total_utxos)
+                if total_btc_supply > 0:
+                    agg_row["total_active_btc_supply"] = round(total_btc_supply / n, 2)
                 for band_key in ["pct_under_1d", "pct_1d_to_1w", "pct_1w_to_1m", "pct_1m_to_6m", "pct_6m_to_1y", "pct_1y_to_2y", "pct_over_2y"]:
                     if band_key in rows[0]:
-                        if total_utxos > 0:
+                        if total_btc_supply > 0:
+                            weighted = sum(float(r[band_key]) * float(r.get("total_active_btc_supply", 1.0)) for r in rows) / total_btc_supply
+                            agg_row[band_key] = round(weighted, 2)
+                        elif total_utxos > 0:
                             weighted = sum(float(r[band_key]) * float(r.get("total_active_utxos", 1)) for r in rows) / total_utxos
                             agg_row[band_key] = round(weighted, 2)
                         else:

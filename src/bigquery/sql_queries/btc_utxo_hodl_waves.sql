@@ -10,6 +10,7 @@
 SELECT
     date,
     total_active_utxos,
+    ROUND(COALESCE(total_active_btc_supply, 0.0), 2) AS total_active_btc_supply,
     ROUND(COALESCE(band_under_1d, 0.0) * 100.0, 2) AS pct_under_1d,
     ROUND(COALESCE(band_1d_to_1w, 0.0) * 100.0, 2) AS pct_1d_to_1w,
     ROUND(COALESCE(band_1w_to_1m, 0.0) * 100.0, 2) AS pct_1w_to_1m,

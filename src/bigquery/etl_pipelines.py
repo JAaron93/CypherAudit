@@ -66,7 +66,7 @@ daily_utxo_state AS (
   SELECT
     d.date,
     COUNT(1) AS total_active_utxos,
-    SUM(u.btc_value) AS total_unspent_btc,
+    SUM(u.btc_value) AS total_active_btc_supply,
     ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) < 1 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_under_1d,
     ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 1 AND DATE_DIFF(d.date, u.creation_date, DAY) < 7 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1d_to_1w,
     ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 7 AND DATE_DIFF(d.date, u.creation_date, DAY) < 30 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1w_to_1m,
@@ -135,6 +135,7 @@ daily_tx_metrics AS (
 SELECT
   u.date,
   COALESCE(u.total_active_utxos, 0) AS total_active_utxos,
+  COALESCE(u.total_active_btc_supply, 0.0) AS total_active_btc_supply,
   COALESCE(t.total_tx_count, 0) AS total_tx_count,
   COALESCE(u.band_under_1d, 0.0) AS band_under_1d,
   COALESCE(u.band_1d_to_1w, 0.0) AS band_1d_to_1w,
@@ -259,7 +260,7 @@ USING (
     SELECT
       d.date,
       COUNT(1) AS total_active_utxos,
-      SUM(u.btc_value) AS total_unspent_btc,
+      SUM(u.btc_value) AS total_active_btc_supply,
       ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) < 1 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_under_1d,
       ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 1 AND DATE_DIFF(d.date, u.creation_date, DAY) < 7 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1d_to_1w,
       ROUND(SAFE_DIVIDE(SUM(CASE WHEN DATE_DIFF(d.date, u.creation_date, DAY) >= 7 AND DATE_DIFF(d.date, u.creation_date, DAY) < 30 THEN u.btc_value ELSE 0 END), SUM(u.btc_value)), 4) AS band_1w_to_1m,
@@ -328,6 +329,7 @@ USING (
   SELECT
     u.date,
     COALESCE(u.total_active_utxos, 0) AS total_active_utxos,
+    COALESCE(u.total_active_btc_supply, 0.0) AS total_active_btc_supply,
     COALESCE(t.total_tx_count, 0) AS total_tx_count,
     COALESCE(u.band_under_1d, 0.0) AS band_under_1d,
     COALESCE(u.band_1d_to_1w, 0.0) AS band_1d_to_1w,
@@ -348,6 +350,7 @@ USING (
 ON T.date = S.date
 WHEN MATCHED THEN UPDATE SET
   total_active_utxos = S.total_active_utxos,
+  total_active_btc_supply = S.total_active_btc_supply,
   total_tx_count = S.total_tx_count,
   band_under_1d = S.band_under_1d,
   band_1d_to_1w = S.band_1d_to_1w,
@@ -361,11 +364,11 @@ WHEN MATCHED THEN UPDATE SET
   whale_tx_count_over_50kusd = S.whale_tx_count_over_50kusd,
   avg_fee_usd = S.avg_fee_usd
 WHEN NOT MATCHED THEN INSERT (
-  date, total_active_utxos, total_tx_count, band_under_1d, band_1d_to_1w, band_1w_to_1m,
+  date, total_active_utxos, total_active_btc_supply, total_tx_count, band_under_1d, band_1d_to_1w, band_1w_to_1m,
   band_1m_to_6m, band_6m_to_1y, band_1y_to_2y, band_over_2y,
   micro_tx_count_under_10usd, retail_tx_count_10_to_500usd, whale_tx_count_over_50kusd, avg_fee_usd
 ) VALUES (
-  S.date, S.total_active_utxos, S.total_tx_count, S.band_under_1d, S.band_1d_to_1w, S.band_1w_to_1m,
+  S.date, S.total_active_utxos, S.total_active_btc_supply, S.total_tx_count, S.band_under_1d, S.band_1d_to_1w, S.band_1w_to_1m,
   S.band_1m_to_6m, S.band_6m_to_1y, S.band_1y_to_2y, S.band_over_2y,
   S.micro_tx_count_under_10usd, S.retail_tx_count_10_to_500usd, S.whale_tx_count_over_50kusd, S.avg_fee_usd
 );
@@ -468,15 +471,56 @@ WHEN NOT MATCHED THEN INSERT (
 """
 
 
+BTC_TABLE_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS `{project_id}.{dataset_id}.btc_daily_utxo_distribution` (
+  date DATE,
+  total_active_utxos INT64,
+  total_active_btc_supply NUMERIC,
+  total_tx_count INT64,
+  band_under_1d FLOAT64,
+  band_1d_to_1w FLOAT64,
+  band_1w_to_1m FLOAT64,
+  band_1m_to_6m FLOAT64,
+  band_6m_to_1y FLOAT64,
+  band_1y_to_2y FLOAT64,
+  band_over_2y FLOAT64,
+  micro_tx_count_under_10usd INT64,
+  retail_tx_count_10_to_500usd INT64,
+  whale_tx_count_over_50kusd INT64,
+  avg_fee_usd FLOAT64
+)
+PARTITION BY date
+CLUSTER BY date;
+"""
+
+USDC_TABLE_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS `{project_id}.{dataset_id}.usdc_daily_organic_metrics` (
+  date DATE,
+  raw_transfer_count INT64,
+  raw_volume_usd NUMERIC,
+  organic_transfer_count INT64,
+  organic_volume_usd NUMERIC,
+  organic_volume_ratio FLOAT64,
+  retail_volume_under_500usd NUMERIC,
+  eoa_to_eoa_volume_usd NUMERIC,
+  eoa_to_contract_volume_usd NUMERIC,
+  contract_to_eoa_volume_usd NUMERIC
+)
+PARTITION BY date
+CLUSTER BY date;
+"""
+
+
 def run_etl_pipeline(
     project_id: str,
     dataset_id: str = "crypto_analytics_mart",
     start_date: str = "2014-01-01",
     end_date: str = "2026-01-01",
-    max_bytes_billed: Optional[int] = None,  # None removes artificial client billing caps on multi-terabyte baseline scans
+    max_bytes_billed: int = 100_000_000_000,  # 100 GB strict billing ceiling per annual batch job
+    chunk_by_year: bool = True,
     dry_run: bool = False,
 ):
-    """Executes or dry-runs the baseline BigQuery Batch ETL pipeline (2014–2026)."""
+    """Executes or dry-runs the baseline BigQuery Batch ETL pipeline (2014–2026) in bounded annual chunks."""
     clean_project = validate_identifier(project_id, "project_id")
     clean_dataset = validate_identifier(dataset_id, "dataset_id")
     clean_start = validate_date(start_date)
@@ -494,25 +538,54 @@ def run_etl_pipeline(
         dataset.location = "US"
         client.create_dataset(dataset, exists_ok=True)
 
-    btc_sql = BTC_ETL_SQL.format(
-        project_id=clean_project, dataset_id=clean_dataset, start_date=clean_start, end_date=clean_end
-    )
-    usdc_sql = USDC_ETL_SQL.format(
-        project_id=clean_project, dataset_id=clean_dataset, start_date=clean_start, end_date=clean_end
-    )
+    # Ensure tables exist with partition/cluster definitions
+    if not dry_run:
+        client.query(BTC_TABLE_SCHEMA_SQL.format(project_id=clean_project, dataset_id=clean_dataset)).result()
+        client.query(USDC_TABLE_SCHEMA_SQL.format(project_id=clean_project, dataset_id=clean_dataset)).result()
 
     job_config = bigquery.QueryJobConfig(
         dry_run=dry_run,
-        maximum_bytes_billed=max_bytes_billed if not dry_run and max_bytes_billed is not None else None,
+        maximum_bytes_billed=max_bytes_billed if not dry_run else None,
     )
 
-    for name, sql in [("Bitcoin Datamart", btc_sql), ("USDC Datamart", usdc_sql)]:
-        logger.info(f"Submitting baseline ETL job for {name} (dry_run={dry_run})...")
-        query_job = client.query(sql, job_config=job_config)
-        if dry_run:
-            logger.info(f"[{name}] Estimated Bytes to Process: {query_job.total_bytes_processed / (1024**3):.2f} GB")
-        else:
-            logger.info(f"[{name}] Job started: {query_job.job_id}")
+    start_year = int(clean_start[:4])
+    end_year = int(clean_end[:4])
+
+    if chunk_by_year and start_year < end_year:
+        for year in range(start_year, end_year + 1):
+            y_start = f"{year:04d}-01-01" if year == start_year else f"{year:04d}-01-01"
+            y_end = clean_end if year == end_year else f"{year:04d}-12-31"
+            if y_start > y_end:
+                continue
+
+            btc_merge = BTC_MONTHLY_MERGE_SQL.format(
+                project_id=clean_project, dataset_id=clean_dataset, start_date=y_start, end_date=y_end
+            )
+            usdc_merge = USDC_MONTHLY_MERGE_SQL.format(
+                project_id=clean_project, dataset_id=clean_dataset, start_date=y_start, end_date=y_end
+            )
+
+            for name, sql in [(f"Bitcoin {year} Annual Batch", btc_merge), (f"USDC {year} Annual Batch", usdc_merge)]:
+                logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={max_bytes_billed})...")
+                query_job = client.query(sql, job_config=job_config)
+                if dry_run:
+                    logger.info(f"[{name}] Estimated Bytes: {query_job.total_bytes_processed / (1024**3):.2f} GB")
+                else:
+                    logger.info(f"[{name}] Job started: {query_job.job_id}")
+    else:
+        btc_sql = BTC_MONTHLY_MERGE_SQL.format(
+            project_id=clean_project, dataset_id=clean_dataset, start_date=clean_start, end_date=clean_end
+        )
+        usdc_sql = USDC_MONTHLY_MERGE_SQL.format(
+            project_id=clean_project, dataset_id=clean_dataset, start_date=clean_start, end_date=clean_end
+        )
+        for name, sql in [("Bitcoin Baseline Batch", btc_sql), ("USDC Baseline Batch", usdc_sql)]:
+            logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={max_bytes_billed})...")
+            query_job = client.query(sql, job_config=job_config)
+            if dry_run:
+                logger.info(f"[{name}] Estimated Bytes: {query_job.total_bytes_processed / (1024**3):.2f} GB")
+            else:
+                logger.info(f"[{name}] Job started: {query_job.job_id}")
 
 
 def run_monthly_incremental_etl(
