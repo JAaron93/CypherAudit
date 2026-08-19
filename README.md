@@ -157,6 +157,7 @@ CypherAudit/
 │   └── nl_parser/
 │       └── gemini_router.py   # Gemini Flash natural language query router
 ├── tests/
+│   ├── test_agent_main.py     # Main runner, prompt ingestion & agent initialization tests
 │   ├── test_security.py       # Rate limiting & circuit breaker tests
 │   ├── test_bigquery_client.py# Byte limit & LRU cache tests
 │   ├── test_gemini_router.py  # NL routing & heuristic fallback tests
@@ -186,7 +187,7 @@ pip install -e ".[dev]"
 ```
 
 ### 2. Configuration
-Copy `.env.example` to `.env` and fill in your credentials:
+Copy `.env.example` to `.env` and fill in your credentials (`AGENT_SEED` is required for cryptographic identity derivation):
 ```bash
 cp .env.example .env
 ```
@@ -194,6 +195,11 @@ cp .env.example .env
 ### 3. Run the Test Suite
 ```bash
 PYTHONPATH=. pytest -v
+```
+
+### 4. Launch SignalChain Oracle Daemon
+```bash
+python -m src.agent.main
 ```
 
 ---

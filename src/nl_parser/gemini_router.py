@@ -8,6 +8,7 @@ import os
 import re
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("cypheraudit.nl_parser")
@@ -51,6 +52,16 @@ Return ONLY a JSON object with this exact schema:
                 logger.warning(f"Could not initialize google-genai Client: {e}")
         return self._client
 
+    def get_system_instructions(self) -> str:
+        """Dynamically loads the modular system prompt instructions from markdown artifact if available."""
+        instructions_path = Path(__file__).parent.parent / "agent" / "prompts" / "oracle_instructions.md"
+        if instructions_path.exists():
+            try:
+                return instructions_path.read_text(encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"Could not read modular instructions at {instructions_path}: {e}")
+        return self.SYSTEM_INSTRUCTION
+
     def parse_prompt(self, prompt: str) -> dict[str, str]:
         """Parses a natural language prompt using Gemini Flash, falling back to rule-based parser if unconfigured."""
         client = self._get_client()
@@ -60,7 +71,7 @@ Return ONLY a JSON object with this exact schema:
                     model="gemini-3.7-flash",
                     contents=prompt,
                     config={
-                        "system_instruction": self.SYSTEM_INSTRUCTION,
+                        "system_instruction": self.get_system_instructions(),
                         "response_mime_type": "application/json",
                     },
                 )
