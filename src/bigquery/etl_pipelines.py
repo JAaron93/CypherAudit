@@ -195,9 +195,9 @@ filtered_transfers AS (
     t.amount_usd,
     -- Flag bots and automated contract loops
     CASE 
+      WHEN from_kc.contract_address IS NOT NULL THEN FALSE
       WHEN COALESCE(mwa.monthly_tx_count, 0) > 1000 THEN FALSE
       WHEN COALESCE(mwa.monthly_volume_usd, 0) > 10000000.0 THEN FALSE
-      WHEN from_kc.contract_address IS NOT NULL AND to_kc.contract_address IS NOT NULL THEN FALSE
       ELSE TRUE 
     END AS is_organic,
     -- Flag micro / retail payments
@@ -223,9 +223,9 @@ SELECT
   SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END) AS organic_volume_usd,
   SAFE_DIVIDE(SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END), SUM(amount_usd)) AS organic_volume_ratio,
   SUM(CASE WHEN is_organic AND is_retail THEN amount_usd ELSE 0 END) AS retail_volume_under_500usd,
-  SUM(CASE WHEN is_organic AND NOT is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
-  SUM(CASE WHEN is_organic AND NOT is_from_contract AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd,
-  SUM(CASE WHEN is_organic AND is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS contract_to_eoa_volume_usd
+  SUM(CASE WHEN is_organic AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
+  SUM(CASE WHEN is_organic AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd,
+  SUM(CASE WHEN is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS contract_to_eoa_volume_usd
 FROM
   filtered_transfers
   GROUP BY
@@ -410,9 +410,9 @@ USING (
       t.to_address,
       t.amount_usd,
       CASE 
+        WHEN from_kc.contract_address IS NOT NULL THEN FALSE
         WHEN COALESCE(mwa.monthly_tx_count, 0) > 1000 THEN FALSE
         WHEN COALESCE(mwa.monthly_volume_usd, 0) > 10000000.0 THEN FALSE
-        WHEN from_kc.contract_address IS NOT NULL AND to_kc.contract_address IS NOT NULL THEN FALSE
         ELSE TRUE 
       END AS is_organic,
       CASE WHEN t.amount_usd <= 500.0 THEN TRUE ELSE FALSE END AS is_retail,
@@ -436,9 +436,9 @@ USING (
     SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END) AS organic_volume_usd,
     SAFE_DIVIDE(SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END), SUM(amount_usd)) AS organic_volume_ratio,
     SUM(CASE WHEN is_organic AND is_retail THEN amount_usd ELSE 0 END) AS retail_volume_under_500usd,
-    SUM(CASE WHEN is_organic AND NOT is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
-    SUM(CASE WHEN is_organic AND NOT is_from_contract AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd,
-    SUM(CASE WHEN is_organic AND is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS contract_to_eoa_volume_usd
+    SUM(CASE WHEN is_organic AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
+    SUM(CASE WHEN is_organic AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd,
+    SUM(CASE WHEN is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS contract_to_eoa_volume_usd
   FROM
     filtered_transfers
   GROUP BY
