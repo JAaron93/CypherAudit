@@ -549,7 +549,7 @@ def run_etl_pipeline(
 
     if chunk_by_year and start_year < end_year:
         for year in range(start_year, end_year + 1):
-            y_start = f"{year:04d}-01-01" if year == start_year else f"{year:04d}-01-01"
+            y_start = clean_start if year == start_year else f"{year:04d}-01-01"
             y_end = clean_end if year == end_year else f"{year:04d}-12-31"
             if y_start > y_end:
                 continue
