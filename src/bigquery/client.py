@@ -137,10 +137,13 @@ class BigQueryAnalyticsClient:
                 agg_row["pct_dormant_supply_over_1y"] = round(agg_row.get("pct_1y_to_2y", 0.0) + agg_row.get("pct_over_2y", 0.0), 2)
 
             elif query_type == "btc_microtransactions":
+                total_utxos = sum_field("total_active_utxos")
                 micro = int(sum_field("micro_tx_count_under_10usd"))
                 retail = int(sum_field("retail_tx_count_10_to_500usd"))
                 whale = int(sum_field("whale_tx_count_over_50kusd"))
                 total_txs = micro + retail + whale
+                if total_utxos > 0:
+                    agg_row["total_active_utxos"] = int(total_utxos)
                 agg_row["micro_tx_count_under_10usd"] = micro
                 agg_row["retail_tx_count_10_to_500usd"] = retail
                 agg_row["whale_tx_count_over_50kusd"] = whale
@@ -148,12 +151,18 @@ class BigQueryAnalyticsClient:
                 agg_row["pct_microtransactions"] = round(micro * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
                 agg_row["pct_retail_commerce"] = round(retail * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
                 agg_row["pct_whale_institutional"] = round(whale * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
-                if total_txs > 0:
+                if total_utxos > 0:
+                    weighted_fee = sum(
+                        float(r.get("avg_fee_usd", 0.0)) * float(r.get("total_active_utxos", 1))
+                        for r in rows
+                    ) / total_utxos
+                    agg_row["avg_fee_usd"] = round(weighted_fee, 2)
+                elif total_txs > 0:
                     weighted_fee = sum(
                         float(r.get("avg_fee_usd", 0.0)) * (
-                            int(r.get("micro_tx_count_under_10usd", 0))
-                            + int(r.get("retail_tx_count_10_to_500usd", 0))
-                            + int(r.get("whale_tx_count_over_50kusd", 0))
+                            float(r.get("micro_tx_count_under_10usd", 0))
+                            + float(r.get("retail_tx_count_10_to_500usd", 0))
+                            + float(r.get("whale_tx_count_over_50kusd", 0))
                         )
                         for r in rows
                     ) / total_txs
@@ -181,9 +190,11 @@ class BigQueryAnalyticsClient:
             elif query_type == "usdc_eoa_topology":
                 eoa_vol = round(sum_field("eoa_to_eoa_volume_usd"), 2)
                 contract_vol = round(sum_field("eoa_to_contract_volume_usd"), 2)
-                total_vol = eoa_vol + contract_vol
+                payout_vol = round(sum_field("contract_to_eoa_volume_usd"), 2)
+                total_vol = eoa_vol + contract_vol + payout_vol
                 agg_row["eoa_to_eoa_volume_usd"] = eoa_vol
                 agg_row["eoa_to_contract_volume_usd"] = contract_vol
+                agg_row["contract_to_eoa_volume_usd"] = payout_vol
                 agg_row["pct_p2p_merchant_commerce"] = round(eoa_vol * 100.0 / total_vol, 2) if total_vol > 0 else 0.0
                 agg_row["pct_defi_smart_contract"] = round(contract_vol * 100.0 / total_vol, 2) if total_vol > 0 else 0.0
 

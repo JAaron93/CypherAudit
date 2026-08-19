@@ -175,7 +175,8 @@ SELECT
   SAFE_DIVIDE(SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END), SUM(amount_usd)) AS organic_volume_ratio,
   SUM(CASE WHEN is_organic AND is_retail THEN amount_usd ELSE 0 END) AS retail_volume_under_500usd,
   SUM(CASE WHEN is_organic AND NOT is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
-  SUM(CASE WHEN is_organic AND (is_from_contract OR is_to_contract) THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd
+  SUM(CASE WHEN is_organic AND NOT is_from_contract AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd,
+  SUM(CASE WHEN is_organic AND is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS contract_to_eoa_volume_usd
 FROM
   filtered_transfers
 GROUP BY
@@ -334,7 +335,8 @@ USING (
     SAFE_DIVIDE(SUM(CASE WHEN is_organic THEN amount_usd ELSE 0 END), SUM(amount_usd)) AS organic_volume_ratio,
     SUM(CASE WHEN is_organic AND is_retail THEN amount_usd ELSE 0 END) AS retail_volume_under_500usd,
     SUM(CASE WHEN is_organic AND NOT is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_eoa_volume_usd,
-    SUM(CASE WHEN is_organic AND (is_from_contract OR is_to_contract) THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd
+    SUM(CASE WHEN is_organic AND NOT is_from_contract AND is_to_contract THEN amount_usd ELSE 0 END) AS eoa_to_contract_volume_usd,
+    SUM(CASE WHEN is_organic AND is_from_contract AND NOT is_to_contract THEN amount_usd ELSE 0 END) AS contract_to_eoa_volume_usd
   FROM
     filtered_transfers
   GROUP BY
@@ -349,15 +351,16 @@ WHEN MATCHED THEN UPDATE SET
   organic_volume_ratio = S.organic_volume_ratio,
   retail_volume_under_500usd = S.retail_volume_under_500usd,
   eoa_to_eoa_volume_usd = S.eoa_to_eoa_volume_usd,
-  eoa_to_contract_volume_usd = S.eoa_to_contract_volume_usd
+  eoa_to_contract_volume_usd = S.eoa_to_contract_volume_usd,
+  contract_to_eoa_volume_usd = S.contract_to_eoa_volume_usd
 WHEN NOT MATCHED THEN INSERT (
   date, raw_transfer_count, raw_volume_usd, organic_transfer_count,
   organic_volume_usd, organic_volume_ratio, retail_volume_under_500usd,
-  eoa_to_eoa_volume_usd, eoa_to_contract_volume_usd
+  eoa_to_eoa_volume_usd, eoa_to_contract_volume_usd, contract_to_eoa_volume_usd
 ) VALUES (
   S.date, S.raw_transfer_count, S.raw_volume_usd, S.organic_transfer_count,
   S.organic_volume_usd, S.organic_volume_ratio, S.retail_volume_under_500usd,
-  S.eoa_to_eoa_volume_usd, S.eoa_to_contract_volume_usd
+  S.eoa_to_eoa_volume_usd, S.eoa_to_contract_volume_usd, S.contract_to_eoa_volume_usd
 );
 """
 

@@ -10,6 +10,7 @@
 
 SELECT
     date,
+    total_active_utxos,
     micro_tx_count_under_10usd,
     retail_tx_count_10_to_500usd,
     whale_tx_count_over_50kusd,

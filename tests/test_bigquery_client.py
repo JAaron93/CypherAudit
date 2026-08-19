@@ -134,6 +134,49 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][0]["avg_fee_usd"] == 4.60
             assert res["data_points"][0]["fee_drag_pct_on_10usd_purchase"] == 46.0
 
+    def test_granularity_aggregation_usdc_eoa_topology(self):
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_instance = MagicMock()
+            mock_bq.return_value = mock_instance
+
+            # EOA->EOA: 400, EOA->Contract: 500, Contract->EOA: 100 => Total = 1000
+            # pct_p2p = 40.0%, pct_defi = 50.0%
+            mock_rows = [
+                {
+                    "date": "2025-01-01",
+                    "eoa_to_eoa_volume_usd": 200.0,
+                    "eoa_to_contract_volume_usd": 250.0,
+                    "contract_to_eoa_volume_usd": 50.0,
+                },
+                {
+                    "date": "2025-01-15",
+                    "eoa_to_eoa_volume_usd": 200.0,
+                    "eoa_to_contract_volume_usd": 250.0,
+                    "contract_to_eoa_volume_usd": 50.0,
+                },
+            ]
+            mock_query_job = MagicMock()
+            mock_query_job.result.return_value = mock_rows
+            mock_query_job.total_bytes_billed = 1048576
+            mock_instance.query.return_value = mock_query_job
+
+            client = BigQueryAnalyticsClient(project_id="test-project")
+            res = client.execute_analytics_query(
+                query_type="usdc_eoa_topology",
+                start_date="2025-01-01",
+                end_date="2025-01-31",
+                granularity="monthly",
+            )
+
+            assert res["status"] == "SUCCESS"
+            assert len(res["data_points"]) == 1
+            assert res["data_points"][0]["period"] == "2025-01"
+            assert res["data_points"][0]["eoa_to_eoa_volume_usd"] == 400.0
+            assert res["data_points"][0]["eoa_to_contract_volume_usd"] == 500.0
+            assert res["data_points"][0]["contract_to_eoa_volume_usd"] == 100.0
+            assert res["data_points"][0]["pct_p2p_merchant_commerce"] == 40.0
+            assert res["data_points"][0]["pct_defi_smart_contract"] == 50.0
+
     def test_byte_limit_exceeded_handled_gracefully(self):
         with patch("google.cloud.bigquery.Client") as mock_bq:
             mock_instance = MagicMock()
