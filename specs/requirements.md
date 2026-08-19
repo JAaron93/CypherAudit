@@ -1,10 +1,11 @@
 # Requirements Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.2.0  
+**Document Version:** 1.3.0  
 **Status:** Approved for Implementation  
-**Traceability Base:** `specs/design.md` (v1.2.0)  
+**Traceability Base:** `specs/design.md` (v1.3.0)  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
-**Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)
+**Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
+**Scheduler Infrastructure:** Google Cloud Scheduler & BigQuery Scheduled Queries (`0 0 1 * *` UTC)
 
 ---
 
@@ -22,8 +23,8 @@
 
 ### US-3: System Owner & Cost Administrator
 > *As the* GCP project owner,  
-> *I want* incremental monthly data pipelines that scan only the previous month's delta (<25 GB) and multi-layered query circuit breakers (50 MB),  
-> *So that* the agent remains continuously updated forever while keeping monthly GCP query costs completely within the 1 TB/month Always-Free Tier ($0.00/month).
+> *I want* Google Cloud to manage the monthly cron job serverlessly (Cloud Scheduler / BigQuery Scheduled Queries) to ingest only the previous month's delta (<25 GB),  
+> *So that* ingestion runs reliably on Google's infrastructure with 99.99% uptime while keeping monthly GCP query costs completely within the Always-Free Tier ($0.00/month).
 
 ---
 
@@ -35,7 +36,7 @@
 * **FR-1.3:** The Bitcoin ETL shall bucket transaction output values into Micro (<$10), Retail ($10–$500), and Whale (>$50,000) counts, and compute the average fee-to-value drag ratio.
 * **FR-1.4:** The system shall provide an Ethereum batch ETL script that queries `bigquery-public-data.crypto_ethereum.token_transfers` for USDC contract `0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48` to generate `crypto_analytics_mart.usdc_daily_organic_metrics`.
 * **FR-1.5:** The USDC ETL shall apply the Visa/Artemis noise filter (excluding wallets with >1,000 tx/month or >$10M monthly volume) to compute organic vs. raw volume and EOA-to-EOA (retail) vs. EOA-to-Contract (DeFi) volume.
-* **FR-1.6 (Continuous Monthly Ingestion):** The system shall provide an incremental ingestion function `run_monthly_incremental_etl(target_year, target_month)` that executes scoped BigQuery `MERGE INTO` queries for month \(M-1\), appending new monthly records into the partitioned datamart without re-scanning historical years.
+* **FR-1.6 (Google Cloud Managed Monthly Ingestion):** The system shall provide automated Google Cloud Scheduler / BigQuery Scheduled Query configurations that execute on the 1st of every month at `00:00 UTC` (`0 0 1 * *`), running the scoped `MERGE INTO` SQL queries to append the previous month's delta without human intervention.
 
 ### FR-2: Parameterized BigQuery Client & Guardrails
 * **FR-2.1:** The BigQuery client (`src/bigquery/client.py`) shall enforce parameterized query execution for all analytical templates (`btc_hodl_waves`, `btc_microtransactions`, `usdc_organic_volume`, `usdc_eoa_topology`).
@@ -47,11 +48,10 @@
 * **FR-3.1:** The system shall provide a natural language parser (`src/nl_parser/gemini_router.py`) powered explicitly by **Gemini 3.7 Flash (`gemini-3.7-flash`)** via `google-genai`.
 * **FR-3.2:** The router shall map incoming user/agent prompts into a structured `AnalyticsQueryRequest` with strict type validation.
 
-### FR-4: ASI Agentverse / uAgents Protocol & Schedulers
+### FR-4: ASI Agentverse / uAgents Protocol
 * **FR-4.1:** The agent (`src/agent/main.py`) shall instantiate a Fetch.ai `Agent` with persistent cryptographic identity and Mailbox connectivity.
 * **FR-4.2:** The agent shall register the `blockchain_analytics_protocol_v1` protocol handling `AnalyticsQueryRequest` and returning `AnalyticsQueryResponse`.
 * **FR-4.3:** The agent shall execute BigQuery calls asynchronously (`asyncio.to_thread`) to prevent blocking the event loop.
-* **FR-4.4 (Scheduled Monthly Ingestion Trigger):** The agent daemon shall incorporate a scheduled monthly cron / interval trigger that runs on the 1st day of each month at 00:00 UTC, triggering `run_monthly_incremental_etl` for the newly completed month.
 
 ### FR-5: Marimo Interactive Research Notebooks & Visualizations
 * **FR-5.1:** The system shall provide two reactive Marimo notebooks (`notebooks/btc_analysis.py` and `notebooks/usdc_analysis.py`).
@@ -74,13 +74,13 @@ Feature: Bitcoin UTXO Age Distribution Analysis
     And the response contains percentage bands for "<24h", "1y-2y", and ">2y"
 ```
 
-### BDD-2: Continuous Monthly Incremental Ingestion
+### BDD-2: Google Cloud Managed Monthly Incremental Ingestion
 ```gherkin
-Feature: Monthly Incremental Data Ingestion
-  Scenario: System rolls over to the 1st of a new calendar month (e.g. 2027-01-01)
-    Given the scheduled monthly ingestion trigger fires on the 1st of the month
-    When run_monthly_incremental_etl executes for target month "2026-12"
-    Then the BigQuery job processes only the 2026-12 date partition (<25 GB scanned)
+Feature: Serverless Monthly Incremental Ingestion
+  Scenario: Google Cloud Scheduler triggers monthly BigQuery ingestion (0 0 1 * *)
+    Given the GCP Cloud Scheduler executes at the start of a new month (e.g. 2027-01-01 00:00 UTC)
+    When BigQuery runs the scheduled MERGE INTO query for the previous month partition
+    Then the job scans only the single previous month delta (<25 GB)
     And new daily records are merged into btc_daily_utxo_distribution and usdc_daily_organic_metrics
-    And subsequent queries for 2026-12 return fresh data with zero manual intervention
+    And subsequent queries for that month return fresh data with 100% serverless automation
 ```

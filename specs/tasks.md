@@ -1,10 +1,11 @@
 # Implementation Tasks & Test-Driven Execution Plan: On-Chain Analytics Oracle
 
-**Document Version:** 1.2.0  
+**Document Version:** 1.3.0  
 **Status:** Approved for Implementation  
-**Traceability Base:** `specs/design.md` (v1.2.0) & `specs/requirements.md` (v1.2.0)  
+**Traceability Base:** `specs/design.md` (v1.3.0) & `specs/requirements.md` (v1.3.0)  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
-**Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)
+**Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
+**Scheduler Infrastructure:** Google Cloud Scheduler & BigQuery Scheduled Queries (`0 0 1 * *` UTC)
 
 ---
 
@@ -18,14 +19,14 @@ The implementation plan is organized into **7 modular execution tracks** with ex
                   ┌────────────────────┴────────────────────┐
                   ▼                                         ▼
    TRACK 2: BigQuery SQL & ETL             TRACK 3: BQ Client & Cache
-   (Data Model & Monthly Pipelines)        (Circuit Breakers & SDK)
+   (Data Model & GCP Scheduled Queries)    (Circuit Breakers & SDK)
                   │                                         │
                   └────────────────────┬────────────────────┘
                                        │
                   ┌────────────────────┴────────────────────┐
                   ▼                                         ▼
    TRACK 4: Gemini 3.7 Flash Router        TRACK 5: uAgents Protocol
-   (Intent & Param Mapping)                (Agentverse & Schedulers)
+   (Intent & Param Mapping)                (Agentverse Integration)
                   │                                         │
                   └────────────────────┬────────────────────┘
                                        │
@@ -83,8 +84,8 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Traceability:** FR-1.1, FR-1.4, COST-2.
 * **Artifacts:** `src/bigquery/etl_pipelines.py`.
 
-### Task 2.4: Continuous Monthly Incremental Ingestion ETL Pipeline
-* **Description:** Add `run_monthly_incremental_etl(project_id, dataset_id, target_year, target_month)` to `src/bigquery/etl_pipelines.py` implementing scoped BigQuery `MERGE INTO` queries that append/update only the target month's partition without full table rescans.
+### Task 2.4: Continuous Monthly Incremental Ingestion ETL & GCP Cloud Scheduler [COMPLETED]
+* **Description:** Implement `run_monthly_incremental_etl` in `src/bigquery/etl_pipelines.py` with scoped BigQuery `MERGE INTO` queries and generate Google Cloud Scheduler / BigQuery Scheduled Query DDL specifications (`0 0 1 * *` UTC) for 100% serverless automation.
 * **Dependencies:** Task 2.3.
 * **Traceability:** FR-1.6, US-2, US-3, BDD-2.
 * **Artifacts:** `src/bigquery/etl_pipelines.py`.
@@ -137,10 +138,10 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Traceability:** FR-4.2, FR-4.3, SEC-1.
 * **Artifacts:** `src/agent/protocols/analytics_protocol.py`.
 
-### Task 5.3: Agent Main Runner & Scheduled Monthly Ingestion Cron
-* **Description:** Implement `src/agent/main.py` configuring the `Agent` instance with cryptographic wallet seed, Agentverse Mailbox endpoint, and an automated monthly background scheduler that invokes `run_monthly_incremental_etl` on the 1st of each calendar month.
-* **Dependencies:** Task 2.4, Task 5.2.
-* **Traceability:** FR-4.1, FR-4.4, NFR-3, US-2, US-3.
+### Task 5.3: Agent Main Runner & Agentverse Mailbox Registration
+* **Description:** Implement `src/agent/main.py` configuring the `Agent` instance with cryptographic wallet seed, Agentverse Mailbox endpoint, and startup banner with endpoint metadata.
+* **Dependencies:** Task 5.2.
+* **Traceability:** FR-4.1, NFR-3, US-2, US-3.
 * **Artifacts:** `src/agent/main.py`.
 
 ---
@@ -184,5 +185,5 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 ### Task 7.4: Marimo Reactive Graph Verification & Export Tests
 * **Description:** Write unit tests to verify that `notebooks/btc_analysis.py` and `notebooks/usdc_analysis.py` instantiate valid Marimo `App` dependency graphs and execute cleanly.
 * **Dependencies:** Task 7.2, Task 7.3.
-* **Traceability:** FR-5.1, NFR-2.
+* **Traceability:** FR-5.4, NFR-2.
 * **Artifacts:** `tests/test_notebooks.py`.

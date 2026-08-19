@@ -1,8 +1,8 @@
 # Architectural Design Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.2.0  
+**Document Version:** 1.3.0  
 **Status:** Approved for Implementation  
-**Target Platform:** Google Cloud BigQuery, Fetch.ai / ASI Agentverse, Marimo Notebooks, Python 3.11+  
+**Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks, Python 3.11+  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`) via `google-genai`  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)
 
@@ -12,10 +12,10 @@
 
 The primary objective of this project is to build an empirical, reproducible **Blockchain Data Engineering & Analytics Agent** that systematically audits 10+ years of Bitcoin (BTC) and USD Coin (USDC) transaction history. The agent evaluates whether cryptocurrency has achieved organic adoption as an everyday medium of exchange (replacing fiat currency) or whether its utility remains confined to speculative store-of-value accumulation and automated decentralized finance (DeFi) loops.
 
-The project operates through dual delivery surfaces:
-1. **Interactive Marimo Research Notebooks:** High-performance, reactive Python notebooks (`marimo`) that execute BigQuery queries, perform statistical hypothesis tests with rich \(\LaTeX\) documentation, and render publication-quality interactive visualizations.
+The project operates through three coordinated delivery surfaces:
+1. **Interactive Marimo Research Notebooks:** High-performance, reactive Python notebooks (`marimo`) executing BigQuery queries, performing statistical hypothesis tests with rich \(\LaTeX\) documentation, and rendering publication-quality interactive visualizations.
 2. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.7 Flash (`gemini-3.7-flash`)** that acts as a public, cost-protected **On-Chain Analytics Oracle** for external agents and researchers on Fetch.ai's Agentverse.
-3. **Continuous Monthly Data Pipeline (Post-Deployment Future-Proofing):** An automated incremental ETL pipeline scheduled on the 1st of each month to ingest new transaction records, ensuring the oracle remains up to date for 2027, 2028, and beyond without requiring full multi-terabyte table rescans.
+3. **Google Cloud Managed Ingestion Cron (2027+ Future-Proofing):** A serverless recurring data pipeline managed directly by **Google Cloud Scheduler / BigQuery Scheduled Queries** running on the 1st of every month (`0 0 1 * *` UTC) to ingest new transaction records automatically within GCP.
 
 ---
 
@@ -71,25 +71,22 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
 
 ---
 
-## 3. System Architecture & Dual Ingestion Lifecycle
-
-The data engineering lifecycle consists of two distinct phases:
+## 3. System Architecture: GCP Managed Scheduling & Analytics Flow
 
 ```
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
- │                      LIFECYCLE PHASE 1: HISTORICAL BASELINE ETL                        │
- │  • Timeframe: 2014-01-01 to 2026-01-01 (12+ Year Longitudinal Dataset)                │
- │  • Process: One-time batch partition materialization into `crypto_analytics_mart`      │
+ │                      GOOGLE CLOUD SCHEDULED CRON (`0 0 1 * *` UTC)                     │
+ │                  (Managed natively by GCP Cloud Scheduler / BigQuery)                  │
  └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                              │
- ┌───────────────────────────────────────────┴────────────────────────────────────────────┐
- │                  LIFECYCLE PHASE 2: CONTINUOUS MONTHLY INCREMENTAL INGESTION           │
- │  • Frequency: Monthly on the 1st day (e.g. at 00:00 UTC)                               │
- │  • Scope: Single previous calendar month delta (e.g. Month M-1)                        │
- │  • Efficiency: Scans ONLY ~25 GB data (< $0.15, absorbed by 1 TB/mo Always-Free tier)  │
- │  • Mutation: BigQuery `MERGE INTO` or Partition Overwrite                              │
- └───────────────────────────────────────────┬────────────────────────────────────────────┘
+                       ┌─────────────────────┴─────────────────────┐
+                       ▼                                           ▼
+          `bigquery-public-data.crypto_bitcoin`       `bigquery-public-data.crypto_ethereum`
+             (Scoped Month M-1 Extract)                  (Scoped Month M-1 Extract)
+                       │                                           │
+                       └─────────────────────┬─────────────────────┘
                                              │
+                                             │ Serverless MERGE INTO (< 25 GB Scanned)
                                              ▼
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
  │                      CURATED ANALYTICAL DATAMART (< 30 MB Total)                       │
@@ -109,34 +106,16 @@ The data engineering lifecycle consists of two distinct phases:
  ├───────────────────────────────────────────┤ ├──────────────────────────────────────────┤
  │ • Interactive UI & Parameter Sliders      │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │
  │ • LaTeX Statistical Formulations          │ │ • In-Memory Rate Limiter (Token Bucket)  │
- │ • Plotly Publication Charts               │ │ • Auto-Scheduled Monthly Ingestion Cron  │
+ │ • Plotly Publication Charts               │ │ • BigQuery Client (`max_bytes=50MB`)     │
  └───────────────────────────────────────────┘ └──────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Incremental Monthly Ingestion Logic
+## 4. Google Cloud Native Scheduling Architecture
 
-To avoid re-scanning multi-terabyte raw tables, the incremental pipeline executes a scoped `MERGE INTO` targeting only the previous month's date bounds:
-
-```sql
-MERGE `{project_id}.{dataset_id}.btc_daily_utxo_distribution` T
-USING (
-  -- Monthly incremental aggregated delta
-  SELECT date, total_active_utxos, ...
-  FROM raw_monthly_extract
-) S
-ON T.date = S.date
-WHEN MATCHED THEN UPDATE SET ...
-WHEN NOT MATCHED THEN INSERT ...;
-```
-
----
-
-## 5. Security Hardening & Cost Protection
-
-1. **Hard Byte Limit (`maximum_bytes_billed`):** 50 MB ceiling on analytical queries; 50 GB ceiling on incremental monthly batch ETL.
-2. **Strict Query Parameterization:** Zero dynamic SQL string concatenation.
-3. **Leaky Bucket Rate Limiting:** 5 req/min and 30 req/day per agent.
-4. **Least-Privilege GCP IAM:** Read-only data viewer on datamart.
-5. **In-Memory LRU Cache:** 0ms cached query responses.
+By leveraging **Google Cloud Scheduler** and **BigQuery Scheduled Queries**, the pipeline achieves:
+1. **100% Serverless Reliability:** Ingestion does not depend on local machines or long-running python daemons remaining online.
+2. **Deterministic Schedule:** Triggers on the 1st of every month at `00:00 UTC` (`0 0 1 * *`).
+3. **Automated Partition Updates:** Scopes execution dynamically to `DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)`, ensuring zero manual configuration month-to-month.
+4. **Cost Containment:** Each monthly run scans only \(\sim 20\text{--}25\text{ GB}\) per month (\(<\$0.15\)), well within the **1,000 GB Always-Free monthly tier**.
