@@ -43,6 +43,7 @@ venv.bak/
 *.json
 !package.json
 !tsconfig.json
+!.greptile/*.json
 
 # SQLite & databases
 *.sqlite
