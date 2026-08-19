@@ -516,7 +516,8 @@ def run_etl_pipeline(
     dataset_id: str = "crypto_analytics_mart",
     start_date: str = "2014-01-01",
     end_date: str = "2026-01-01",
-    max_bytes_billed: int = 100_000_000_000,  # 100 GB strict billing ceiling per annual batch job
+    btc_max_bytes_billed: int = 2_500_000_000_000,  # 2.5 TB bounded ceiling for cumulative Bitcoin outputs backfill
+    usdc_max_bytes_billed: int = 500_000_000_000,  # 500 GB bounded ceiling for historical USDC transfers
     chunk_by_year: bool = True,
     dry_run: bool = False,
 ):
@@ -543,11 +544,6 @@ def run_etl_pipeline(
         client.query(BTC_TABLE_SCHEMA_SQL.format(project_id=clean_project, dataset_id=clean_dataset)).result()
         client.query(USDC_TABLE_SCHEMA_SQL.format(project_id=clean_project, dataset_id=clean_dataset)).result()
 
-    job_config = bigquery.QueryJobConfig(
-        dry_run=dry_run,
-        maximum_bytes_billed=max_bytes_billed if not dry_run else None,
-    )
-
     start_year = int(clean_start[:4])
     end_year = int(clean_end[:4])
 
@@ -565,8 +561,17 @@ def run_etl_pipeline(
                 project_id=clean_project, dataset_id=clean_dataset, start_date=y_start, end_date=y_end
             )
 
-            for name, sql in [(f"Bitcoin {year} Annual Batch", btc_merge), (f"USDC {year} Annual Batch", usdc_merge)]:
-                logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={max_bytes_billed})...")
+            jobs = [
+                (f"Bitcoin {year} Annual Batch", btc_merge, btc_max_bytes_billed),
+                (f"USDC {year} Annual Batch", usdc_merge, usdc_max_bytes_billed),
+            ]
+
+            for name, sql, ceiling in jobs:
+                job_config = bigquery.QueryJobConfig(
+                    dry_run=dry_run,
+                    maximum_bytes_billed=ceiling if not dry_run else None,
+                )
+                logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={ceiling})...")
                 query_job = client.query(sql, job_config=job_config)
                 if dry_run:
                     logger.info(f"[{name}] Estimated Bytes: {query_job.total_bytes_processed / (1024**3):.2f} GB")
@@ -579,8 +584,16 @@ def run_etl_pipeline(
         usdc_sql = USDC_MONTHLY_MERGE_SQL.format(
             project_id=clean_project, dataset_id=clean_dataset, start_date=clean_start, end_date=clean_end
         )
-        for name, sql in [("Bitcoin Baseline Batch", btc_sql), ("USDC Baseline Batch", usdc_sql)]:
-            logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={max_bytes_billed})...")
+        jobs = [
+            ("Bitcoin Baseline Batch", btc_sql, btc_max_bytes_billed),
+            ("USDC Baseline Batch", usdc_sql, usdc_max_bytes_billed),
+        ]
+        for name, sql, ceiling in jobs:
+            job_config = bigquery.QueryJobConfig(
+                dry_run=dry_run,
+                maximum_bytes_billed=ceiling if not dry_run else None,
+            )
+            logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={ceiling})...")
             query_job = client.query(sql, job_config=job_config)
             if dry_run:
                 logger.info(f"[{name}] Estimated Bytes: {query_job.total_bytes_processed / (1024**3):.2f} GB")
@@ -593,7 +606,8 @@ def run_monthly_incremental_etl(
     dataset_id: str = "crypto_analytics_mart",
     target_year: int = 2026,
     target_month: int = 1,
-    max_bytes_billed: int = 50_000_000_000,  # 50 GB ceiling for single-month delta
+    btc_max_bytes_billed: int = 2_500_000_000_000,  # 2.5 TB ceiling for cumulative Bitcoin outputs scan
+    usdc_max_bytes_billed: int = 50_000_000_000,  # 50 GB ceiling for single-month USDC delta
     dry_run: bool = False,
 ):
     """Executes incremental MERGE INTO for a single calendar month (e.g. for continuous ingestion in 2027+)."""
@@ -615,13 +629,17 @@ def run_monthly_incremental_etl(
         project_id=clean_project, dataset_id=clean_dataset, start_date=start_date, end_date=end_date
     )
 
-    job_config = bigquery.QueryJobConfig(
-        dry_run=dry_run,
-        maximum_bytes_billed=max_bytes_billed if not dry_run else None,
-    )
+    jobs = [
+        ("Bitcoin Monthly MERGE", btc_merge_sql, btc_max_bytes_billed),
+        ("USDC Monthly MERGE", usdc_merge_sql, usdc_max_bytes_billed),
+    ]
 
-    for name, sql in [("Bitcoin Monthly MERGE", btc_merge_sql), ("USDC Monthly MERGE", usdc_merge_sql)]:
-        logger.info(f"Submitting {name} incremental job (dry_run={dry_run})...")
+    for name, sql, ceiling in jobs:
+        job_config = bigquery.QueryJobConfig(
+            dry_run=dry_run,
+            maximum_bytes_billed=ceiling if not dry_run else None,
+        )
+        logger.info(f"Submitting {name} incremental job (dry_run={dry_run}, max_bytes_billed={ceiling})...")
         query_job = client.query(sql, job_config=job_config)
         if dry_run:
             logger.info(f"[{name}] Estimated Bytes to Process: {query_job.total_bytes_processed / (1024**3):.2f} GB")
