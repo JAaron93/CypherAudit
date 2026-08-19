@@ -1,8 +1,9 @@
 # Architectural Design Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.0.0  
+**Document Version:** 1.1.0  
 **Status:** Approved for Implementation  
-**Target Platform:** Google Cloud BigQuery, Fetch.ai / ASI Agentverse, Python 3.11+  
+**Target Platform:** Google Cloud BigQuery, Fetch.ai / ASI Agentverse, Marimo Notebooks, Python 3.11+  
+**LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`) via `google-genai`
 
 ---
 
@@ -10,13 +11,13 @@
 
 The primary objective of this project is to build an empirical, reproducible **Blockchain Data Engineering & Analytics Agent** that systematically audits 10+ years of Bitcoin (BTC) and USD Coin (USDC) transaction history. The agent evaluates whether cryptocurrency has achieved organic adoption as an everyday medium of exchange (replacing fiat currency) or whether its utility remains confined to speculative store-of-value accumulation and automated decentralized finance (DeFi) loops.
 
-Once the analytical datamarts and query engines are constructed, the agent is packaged as an autonomous **uAgent** and published to the **Artificial Superintelligence (ASI) Alliance's Agentverse** as a public, cost-protected **On-Chain Analytics Oracle**. This enables external researchers, trading agents, and DAO governance bots to query verified on-chain metrics without requiring their own BigQuery infrastructure or domain-specific SQL knowledge.
+The project operates through dual delivery surfaces:
+1. **Interactive Marimo Research Notebooks:** High-performance, reactive Python notebooks (`marimo`) that execute BigQuery queries, perform statistical hypothesis tests with rich \(\LaTeX\) documentation, and render publication-quality interactive visualizations (stacked HODL area charts, fee-drag curves, counterparty Sankey diagrams).
+2. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.7 Flash (`gemini-3.7-flash`)** that acts as a public, cost-protected **On-Chain Analytics Oracle** for external agents and researchers on Fetch.ai's Agentverse.
 
 ---
 
-## 2. Core Research Hypotheses & Target Questions
-
-The system is designed to provide empirical, data-backed answers to the following core questions:
+## 2. Core Research Hypotheses & Mathematical Formulations
 
 ```
                                   CORE RESEARCH INQUIRIES
@@ -44,24 +45,48 @@ The system is designed to provide empirical, data-backed answers to the followin
  └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Mathematical & Statistical Formulations
+
+#### A. Velocity of Money (\(V\))
+The economic velocity of on-chain currency measures the frequency with which a unit of currency is transferred over time:
+\[
+V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply}}
+\]
+Where \(\text{TxValue}_i\) represents filtered economic transfer outputs excluding change addresses and self-churn.
+
+#### B. Fee Drag on Retail Commerce
+Fee drag measures the economic penalty imposed on everyday retail transactions:
+\[
+\text{FeeDrag}_{\text{basket}} = \left( \frac{\text{Fee}_{\text{avg}}}{\text{BasketValue}_{\text{USD}}} \right) \times 100\%
+\]
+For a typical \(\$10.00\) coffee/grocery purchase, a fee drag \(\text{FeeDrag}_{10} > 5\%\) demonstrates mathematical irrationality for base-layer consumer commerce.
+
+#### C. Stablecoin Organic Adoption Ratio (\(\Phi_{\text{organic}}\))
+Following the Visa/Artemis noise-filter heuristic:
+\[
+\Phi_{\text{organic}} = \frac{\sum V_{\text{organic}}}{\sum V_{\text{raw}}} = \frac{\sum_{j \in \text{Organic}} v_j}{\sum_{k \in \text{All}} v_k}
+\]
+Where \(\text{Organic} = \{ \text{tx} \mid \text{frequency}(\text{sender}) \le 1000\text{ tx/month} \land \text{vol}(\text{sender}) \le \$10\text{M/month} \land \neg \text{isContractLoop}(\text{tx}) \}\).
+
+#### D. Counterparty Topology Ratio (\(\Omega_{\text{retail}}\))
+\[
+\Omega_{\text{retail}} = \frac{\sum V_{\text{EOA}\rightarrow\text{EOA}}}{\sum V_{\text{EOA}\rightarrow\text{EOA}} + \sum V_{\text{EOA}\rightarrow\text{Contract}}}
+\]
+
 ---
 
 ## 3. Literature Gap Analysis: Where Prior Analyses Fell Short
 
-While several organizations have touched upon crypto adoption, existing reports leave critical methodology gaps that this project directly resolves:
-
-| Study / Institution | Previous Approach & Limitations | How This Project Overcomes It |
+| Study / Institution | Previous Approach & Limitations | How CypherAudit Overcomes It |
 | :--- | :--- | :--- |
 | **Federal Reserve (SHED Reports)** | Relies exclusively on consumer self-reporting surveys. Lacks granular, verifiable on-chain behavioral data. | **Empirical Blockchain Ground Truth:** Measures actual UTXO spend patterns, transaction sizes, and counterparty entities directly from the ledger. |
-| **Visa / Artemis / Allium** | Published aggregated macro dashboards and filtered high-level metrics, but keep underlying classification datasets and custom ETL logic closed-source. | **100% Open & Reproducible SQL:** Fully open-source, parameterized BigQuery scripts that allow any researcher to audit the exact filtering logic. |
+| **Visa / Artemis / Allium** | Published aggregated macro dashboards and filtered high-level metrics, but keep underlying classification datasets and custom ETL logic closed-source. | **100% Open & Reproducible SQL + Marimo:** Fully open-source, parameterized BigQuery scripts and reactive notebooks allowing complete auditability. |
 | **Chainalysis / TRM Labs** | Proprietary clustering algorithms and closed-source enterprise software inaccessible to independent researchers and autonomous agents. | **Standardized Agent-to-Agent Protocol:** Exposes analytical models directly via an open uAgents protocol on ASI Agentverse. |
-| **Qualitative Critiques (patio11, Molly White)** | Provide compelling economic theory and historical merchant case studies, but lack longitudinal quantitative SQL metrics. | **Mathematical Proof of Fee Drag:** Quantifies historical fee-to-value drag ratios across 10 years of transactions ($5–$50 retail baskets). |
+| **Qualitative Critiques (patio11, Molly White)** | Provide compelling economic theory and historical merchant case studies, but lack longitudinal quantitative SQL metrics. | **Mathematical Proof of Fee Drag:** Quantifies historical fee-to-value drag ratios across 10 years of transactions ($5–$50 retail baskets) with \(\LaTeX\) equations and statistical charts. |
 
 ---
 
-## 4. System Architecture: The Curated Datamart Pattern
-
-To ensure ongoing BigQuery operational costs remain strictly at **$0.00/month** within Google Cloud's Always-Free Tier (1 TB/month query allocation), the system decouples heavy raw-data processing from runtime user queries via the **Curated Datamart Pattern**.
+## 4. System Architecture: The Curated Datamart & Marimo Analytics Pattern
 
 ```
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -85,34 +110,48 @@ To ensure ongoing BigQuery operational costs remain strictly at **$0.00/month** 
  │                       (Dataset: `crypto_analytics_mart` in User GCP)                   │
  ├───────────────────────────────────────────┬────────────────────────────────────────────┤
  │ `btc_daily_utxo_distribution`             │ Daily UTXO age bands (HODL waves), average │
- │                                           │ transaction sizes, velocity.               │
+ │                                           │ transaction sizes, fee drag.               │
  ├───────────────────────────────────────────┼────────────────────────────────────────────┤
  │ `usdc_daily_organic_metrics`              │ Noise-filtered volume, organic transfer    │
  │                                           │ counts, retail vs whale size breakdown.    │
- ├───────────────────────────────────────────┼────────────────────────────────────────────┤
- │ `counterparty_topology_breakdown`         │ EOA-to-EOA (P2P/Merchant) vs EOA-to-       │
- │                                           │ Contract (DeFi/MEV) ratios.                │
  └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                              │
-                                             │ Scans < 5 MB per query (< $0.00003)
-                                             ▼
- ┌────────────────────────────────────────────────────────────────────────────────────────┐
- │                     PHASE 3: uAGENTS / AGENTVERSE ANALYTICS ORACLE                     │
- ├────────────────────────────────────────────────────────────────────────────────────────┤
- │  • In-Memory Leaky Bucket Rate Limiter (Max 5 req/min per agent)                       │
- │  • BigQuery Client with Hard Circuit Breakers (`maximum_bytes_billed = 50 MB`)         │
- │  • Gemini Flash Semantic Query Mapper (Maps NL -> Parameterized SQL)                   │
- │  • LRU Result Cache (Duplicate requests answered in 0ms with 0 BQ scans)               │
- │  • ASI Agentverse Registration & Almanac Manifest                                      │
- └────────────────────────────────────────────────────────────────────────────────────────┘
+                       ┌─────────────────────┴─────────────────────┐
+                       │ Scans < 5 MB per query (< $0.00003)       │
+                       ▼                                           ▼
+ ┌───────────────────────────────────────────┐ ┌──────────────────────────────────────────┐
+ │    MARIMO REACTIVE RESEARCH NOTEBOOKS     │ │  uAGENTS / AGENTVERSE ANALYTICS ORACLE   │
+ ├───────────────────────────────────────────┤ ├──────────────────────────────────────────┤
+ │ • Interactive UI & Parameter Sliders      │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │
+ │ • LaTeX Statistical Formulations          │ │ • In-Memory Rate Limiter (Token Bucket)  │
+ │ • Plotly Publication Charts (HODL waves,  │ │ • BigQuery Client (`max_bytes=50MB`)     │
+ │   Fee Drag, USDC Organic vs Bot Volume)   │ │ • ASI Agentverse Mailbox & Almanac       │
+ └───────────────────────────────────────────┘ └──────────────────────────────────────────┘
 ```
 
 ---
 
-## 5. Curated Datamart Schemas
+## 5. Interactive Research Layer: Marimo Reactive Notebooks
 
-### 5.1 `btc_daily_utxo_distribution`
-Aggregates Bitcoin unspent outputs into standard HODL age bands:
+To provide transparent, visual, and scientifically rigorous research artifacts, the project includes dedicated **Marimo notebooks** (`marimo`):
+
+### 5.1 Structure & Design of Marimo Notebooks
+1. **Reactive Cell Dependency Graph:** Data is queried via BigQuery client once and reactively feeds downstream statistical filters and visualization cells.
+2. **Explanatory Markdown Cells with \(\LaTeX\):** Every code cell is preceded by a rich markdown cell detailing:
+   * The economic hypothesis under test.
+   * The formal mathematical definition (\(\LaTeX\)).
+   * The data engineering transformation and statistical methodology applied (e.g. Mann-Kendall trend test, rolling volatility, percentiles).
+3. **Publication-Quality Visualizations:**
+   * **Stacked Area HODL Wave Distribution:** Color-banded visualization of Bitcoin supply age bands from 2014 to 2026.
+   * **Fee-to-Value Drag Logarithmic Curves:** Demonstrating the fee burden on \$10, \$50, and \$100 purchases across fee market spikes.
+   * **USDC Volume Waterfall / Organic Ratio Plot:** Stacked bar and time series isolating organic volume from bot noise over time.
+   * **Counterparty Topology Donut & Sankey Charts:** Visualizing EOA-to-EOA commerce vs EOA-to-Contract DeFi liquidity routing.
+
+---
+
+## 6. Curated Datamart Schemas
+
+### 6.1 `btc_daily_utxo_distribution`
 * `date` (DATE, Partition Key): Calendar day (UTC).
 * `total_active_utxos` (INT64): Count of distinct active UTXOs on that date.
 * `band_under_1d` (FLOAT64): % of BTC supply unspent for < 24 hours.
@@ -127,8 +166,7 @@ Aggregates Bitcoin unspent outputs into standard HODL age bands:
 * `whale_tx_count_over_50kusd` (INT64): Transactions > $50,000.
 * `avg_fee_usd` (FLOAT64): Average transaction fee in USD equivalent.
 
-### 5.2 `usdc_daily_organic_metrics`
-Applies the Visa/Artemis noise filter to USDC transfers:
+### 6.2 `usdc_daily_organic_metrics`
 * `date` (DATE, Partition Key): Calendar day (UTC).
 * `raw_transfer_count` (INT64): Total ERC-20 transfer events.
 * `raw_volume_usd` (NUMERIC): Total nominal volume transferred.
@@ -141,58 +179,17 @@ Applies the Visa/Artemis noise filter to USDC transfers:
 
 ---
 
-## 6. Security Hardening & Cost Protection (Defense-in-Depth)
+## 7. Security Hardening & Cost Protection (Defense-in-Depth)
 
-To prevent resource exhaustion, malicious quota draining, or script kiddie abuse on Agentverse:
-
-```
-[Incoming Request] ──► [Rate Limiter (Token Bucket)] ──► [Input Sanitizer & Schema Validator]
-                                                                    │
-                             ┌──────────────────────────────────────┘
-                             ▼
-                 [In-Memory LRU Cache Check]
-                  ├── Match Found ──► Return Cached JSON (0ms, $0.00 BQ cost)
-                  └── Cache Miss
-                             │
-                             ▼
-                 [Strict Parameterized SQL Builder] (Zero dynamic string concatenation)
-                             │
-                             ▼
-                 [BigQuery Client Execution]
-                  ├── `maximum_bytes_billed = 50,000,000` (50 MB hard cap)
-                  ├── `use_query_cache = true`
-                  └── Read-Only GCP Service Account (roles/bigquery.dataViewer)
-```
-
-1. **Hard Byte Limit (`maximum_bytes_billed`):** Set to 50 MB on every BigQuery job configuration. If an unexpected query attempts to scan 51 MB, BigQuery rejects the job immediately without charging.
-2. **Strict Query Parameterization:** Zero string formatting or dynamic SQL execution. Incoming queries are mapped to predefined SQL templates with strict type validation (`int`, `date`, `float`).
-3. **Leaky Bucket Rate Limiting:** Each caller (`sender` address or IP) is restricted to a maximum of 5 requests per minute and 30 requests per day.
-4. **Least-Privilege GCP IAM:** The service account JSON used by the agent possesses only `roles/bigquery.dataViewer` on `crypto_analytics_mart` and `roles/bigquery.jobUser` on the project. It has zero administrative or billing permissions.
-5. **GCP Project Quota Ceiling:** A daily project query cap (e.g., 10 GB/day) is configured in Cloud Console to guarantee never exceeding the 1,000 GB monthly free tier.
+1. **Hard Byte Limit (`maximum_bytes_billed`):** Set to 50 MB on every BigQuery job configuration.
+2. **Strict Query Parameterization:** Zero string formatting or dynamic SQL execution.
+3. **Leaky Bucket Rate Limiting:** Each caller is restricted to max 5 req/min and 30 req/day.
+4. **Least-Privilege GCP IAM:** Read-only `roles/bigquery.dataViewer` permissions.
+5. **In-Memory LRU Cache:** Duplicate requests answered in 0ms with 0 BigQuery scans.
 
 ---
 
-## 7. ASI Agentverse & uAgents Protocol Specification
+## 8. ASI Agentverse & Gemini 3.7 Flash Integration
 
-The agent communicates using Fetch.ai's `uagents` protocol.
-
-### 7.1 Protocol Identifier
-`blockchain_analytics_protocol_v1`
-
-### 7.2 Message Schemas
-```python
-class AnalyticsQueryRequest(Model):
-    query_type: str  # "btc_hodl_waves", "btc_microtransactions", "usdc_organic_volume", "eoa_topology"
-    start_date: str  # "YYYY-MM-DD"
-    end_date: str    # "YYYY-MM-DD"
-    granularity: str # "daily", "monthly", "yearly"
-
-class AnalyticsQueryResponse(Model):
-    status: str      # "SUCCESS" or "ERROR"
-    query_type: str
-    timeframe: str
-    bytes_scanned_mb: float
-    data_points: list[dict]
-    empirical_summary: str
-    reproducible_sql: str
-```
+* **LLM Engine:** `gemini-3.7-flash` via `google-genai` for natural language intent and parameter mapping.
+* **Agent Framework:** `uagents` (Fetch.ai SDK) with `blockchain_analytics_protocol_v1`.

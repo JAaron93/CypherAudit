@@ -1,8 +1,9 @@
 # Requirements Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.0.0  
+**Document Version:** 1.1.0  
 **Status:** Approved for Implementation  
-**Traceability Base:** `specs/design.md`  
+**Traceability Base:** `specs/design.md` (v1.1.0)  
+**LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)
 
 ---
 
@@ -10,12 +11,12 @@
 
 ### US-1: Empirical Blockchain Researcher
 > *As a* cryptocurrency researcher or data scientist,  
-> *I want to* inspect a decade of Bitcoin UTXO age distributions and USDC organic transaction metrics,  
-> *So that I can* empirically prove whether crypto is functioning as an everyday medium of exchange or purely as a speculative store of value.
+> *I want to* inspect a decade of Bitcoin UTXO age distributions and USDC organic transaction metrics via interactive Marimo notebooks with rich \(\LaTeX\) formulations and statistical charts,  
+> *So that I can* empirically test whether crypto is functioning as an everyday medium of exchange or purely as a speculative store of value.
 
 ### US-2: ASI Agentverse Autonomous Consumer
 > *As an* autonomous trading or governance agent on Fetch.ai's Agentverse,  
-> *I want to* send structured or natural language analytical queries to the Analytics Oracle,  
+> *I want to* send natural language or structured queries parsed by Gemini 3.7 Flash to the Analytics Oracle,  
 > *So that I can* retrieve noise-filtered on-chain volume and retail ratios without running heavy cloud infrastructure or SQL pipelines myself.
 
 ### US-3: System Owner & Cost Administrator
@@ -35,13 +36,13 @@
 * **FR-1.5:** The USDC ETL shall apply the Visa/Artemis noise filter (excluding wallets with >1,000 tx/month or >$10M monthly volume) to compute organic vs. raw volume and EOA-to-EOA (retail) vs. EOA-to-Contract (DeFi) volume.
 
 ### FR-2: Parameterized BigQuery Client & Guardrails
-* **FR-2.1:** The BigQuery client (`src/bigquery/client.py`) shall enforce parameterized query execution for all analytical templates (`btc_hodl_waves`, `btc_microtransactions`, `usdc_organic_volume`, `eoa_topology`).
+* **FR-2.1:** The BigQuery client (`src/bigquery/client.py`) shall enforce parameterized query execution for all analytical templates (`btc_hodl_waves`, `btc_microtransactions`, `usdc_organic_volume`, `usdc_eoa_topology`).
 * **FR-2.2:** The client shall strictly forbid dynamic SQL string formatting to ensure total immunity to SQL injection.
 * **FR-2.3:** The client shall configure `QueryJobConfig(maximum_bytes_billed=50_000_000, use_query_cache=True)` on every execution.
 
-### FR-3: Natural Language Query Router
-* **FR-3.1:** The system shall provide a natural language parser (`src/nl_parser/gemini_router.py`) powered by Gemini Flash via `google-genai`.
-* **FR-3.2:** The router shall map incoming user/agent prompts (e.g. *"Show me the percentage of Bitcoin unspent for over 2 years in 2025"*) into a structured `AnalyticsQueryRequest` with strict type validation.
+### FR-3: Gemini 3.7 Flash Natural Language Query Router
+* **FR-3.1:** The system shall provide a natural language parser (`src/nl_parser/gemini_router.py`) powered explicitly by **Gemini 3.7 Flash (`gemini-3.7-flash`)** via `google-genai`.
+* **FR-3.2:** The router shall map incoming user/agent prompts into a structured `AnalyticsQueryRequest` with strict type validation.
 * **FR-3.3:** If an incoming prompt cannot be mapped to an authorized analytical template, the router shall return a helpful schema clarification without executing any cloud query.
 
 ### FR-4: ASI Agentverse / uAgents Protocol
@@ -49,29 +50,33 @@
 * **FR-4.2:** The agent shall register the `blockchain_analytics_protocol_v1` protocol handling `AnalyticsQueryRequest` and returning `AnalyticsQueryResponse`.
 * **FR-4.3:** The agent shall include human-readable empirical interpretations, key statistical metrics, bytes scanned, and the reproducible SQL template in every successful response.
 
+### FR-5: Marimo Interactive Research Notebooks & Visualizations
+* **FR-5.1:** The system shall provide two reactive Marimo notebooks:
+  1. `notebooks/btc_analysis.py`: Bitcoin UTXO HODL age bands, velocity decay, and fee drag analysis.
+  2. `notebooks/usdc_analysis.py`: USDC organic vs. bot noise volume, retail sizing, and EOA counterparty topology.
+* **FR-5.2:** Each code cell in the Marimo notebooks must be preceded by an explanatory markdown cell documenting the economic hypothesis, statistical methodology, and \(\LaTeX\) equations.
+* **FR-5.3:** The notebooks shall render interactive publication-quality charts (Plotly) including:
+  * 10-year Bitcoin HODL wave stacked area distribution.
+  * Fee-to-value drag percentage curves on microtransactions (\$10, \$50, \$100).
+  * USDC Organic vs. Bot volume waterfall and ratio time series.
+  * Counterparty topology donut / breakdown charts (EOA $\rightarrow$ EOA vs EOA $\rightarrow$ Contract).
+* **FR-5.4:** The notebooks shall execute BigQuery data retrieval in dedicated data-loading cells with caching before executing downstream analytical cells.
+
 ---
 
 ## 3. Security & Cost Requirements (SEC & COST)
 
-* **SEC-1 (Token Bucket Rate Limiting):** The agent shall enforce a rate limit of maximum 5 requests per minute and 30 requests per day per caller address/IP. Requests exceeding this threshold shall receive a structured `RATE_LIMITED` error response without triggering BigQuery.
-* **SEC-2 (Least-Privilege IAM):** The runtime GCP credentials must only possess `roles/bigquery.dataViewer` on the `crypto_analytics_mart` dataset and `roles/bigquery.jobUser` on the project.
-* **SEC-3 (Result Caching):** The agent shall maintain an in-memory LRU cache (capacity 500 entries, TTL 24 hours). Identical parameter requests shall be served from cache in < 5ms with zero BigQuery scans.
-* **COST-1 (Bytes Billed Ceiling):** BigQuery queries must never exceed 50 MB scanned per query job. If a query attempts to scan > 50 MB, the client will immediately trap the BigQuery rejection error and return a safe error message.
-* **COST-2 (Monthly Free Tier Compliance):** Total monthly storage of the curated datamart shall remain under 100 MB, and monthly query scan volume shall remain under 10 GB (well below the GCP 1,000 GB Always-Free quota).
+* **SEC-1 (Token Bucket Rate Limiting):** Max 5 req/min and 30 req/day per caller address/IP.
+* **SEC-2 (Least-Privilege IAM):** Read-only `roles/bigquery.dataViewer` on `crypto_analytics_mart`.
+* **SEC-3 (Result Caching):** In-memory LRU cache (500 capacity, 24h TTL) serving duplicate queries in < 5ms with zero BQ scans.
+* **COST-1 (Bytes Billed Ceiling):** BigQuery queries must never exceed 50 MB scanned per query job (`maximum_bytes_billed = 50_000_000`).
+* **COST-2 (Monthly Free Tier Compliance):** Total monthly storage < 100 MB, query scan volume < 10 GB (well below the 1,000 GB GCP Always-Free quota).
 
 ---
 
-## 4. Non-Functional Requirements (NFR)
+## 4. Behavior-Driven Development (BDD) Acceptance Criteria
 
-* **NFR-1 (Latency):** Cached queries shall return in < 10ms; uncached datamart queries shall return in < 2.5 seconds.
-* **NFR-2 (Reproducibility):** All SQL templates must be standard ANSI SQL executable in BigQuery Studio without proprietary dependencies.
-* **NFR-3 (Availability):** The uAgent process must support running as a continuous background daemon with automatic reconnection to the Agentverse Mailbox.
-
----
-
-## 5. Behavior-Driven Development (BDD) Acceptance Criteria
-
-### BDD-1: Querying Bitcoin UTXO HODL Waves
+### BDD-1: Querying Bitcoin UTXO HODL Waves via BigQuery Client
 ```gherkin
 Feature: Bitcoin UTXO Age Distribution Analysis
   Scenario: External agent requests 2024-2026 Bitcoin HODL age bands
@@ -81,18 +86,24 @@ Feature: Bitcoin UTXO Age Distribution Analysis
     Then the response status is "SUCCESS"
     And bytes_scanned_mb is less than 10.0 MB
     And the response contains percentage bands for "<24h", "1y-2y", and ">2y"
-    And the empirical summary highlights the proportion of dormant supply (>2y)
 ```
 
-### BDD-2: Querying USDC Organic vs. Bot Volume
+### BDD-2: Marimo Interactive Visualizations and LaTeX Formulations
 ```gherkin
-Feature: USDC Organic Payment Volume Filtering
-  Scenario: External agent requests organic vs noise breakdown
-    Given a request for "usdc_organic_volume" for year "2025"
-    When the query is executed against crypto_analytics_mart.usdc_daily_organic_metrics
-    Then the response status is "SUCCESS"
-    And organic_volume_ratio is returned between 0.15 and 0.40
-    And the response explicitly differentiates EOA-to-EOA commerce volume from EOA-to-Contract DeFi volume
+Feature: Interactive Marimo Research Notebooks
+  Scenario: Data scientist launches Bitcoin Marimo notebook
+    Given the user starts the Marimo reactive notebook "notebooks/btc_analysis.py"
+    When the BigQuery client retrieves the 10-year HODL distribution dataset
+    Then the notebook displays the LaTeX velocity formula: V = Y / M
+    And an interactive Plotly stacked area chart of HODL age bands is rendered
+    And an interactive fee drag curve showing retail purchase economic irrationality is displayed
+
+  Scenario: Data scientist launches USDC Marimo notebook
+    Given the user starts the Marimo reactive notebook "notebooks/usdc_analysis.py"
+    When the BigQuery client retrieves the organic metrics dataset
+    Then the notebook displays the LaTeX organic ratio formula: \Phi_{organic} = \sum V_{organic} / \sum V_{raw}
+    And an interactive Plotly chart displays the 70%+ bot noise vs 30% organic volume ratio
+    And an EOA-to-EOA commerce vs DeFi contract interaction chart is rendered
 ```
 
 ### BDD-3: Defense-in-Depth Malicious Flood & Byte Limit Protection
@@ -103,10 +114,4 @@ Feature: Security Hardening and Billing Protection
     When the first 5 requests are processed
     Then the subsequent 15 requests are immediately rejected with status "RATE_LIMITED"
     And zero BigQuery jobs are initiated for the rejected requests
-
-  Scenario: Query exceeds 50 MB byte limit
-    Given an abnormal query configuration that would scan 200 MB
-    When BigQuery evaluates maximum_bytes_billed = 50_000_000
-    Then the BigQuery job is aborted by the GCP engine before execution
-    And the agent returns a safe error without incurring billing charges
 ```

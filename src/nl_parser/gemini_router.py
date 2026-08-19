@@ -57,7 +57,7 @@ Return ONLY a JSON object with this exact schema:
         if client is not None:
             try:
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.7-flash",
                     contents=prompt,
                     config={
                         "system_instruction": self.SYSTEM_INSTRUCTION,
