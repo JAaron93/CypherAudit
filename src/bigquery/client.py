@@ -198,6 +198,7 @@ class BigQueryAnalyticsClient:
                 agg_row["contract_to_eoa_volume_usd"] = payout_vol
                 agg_row["pct_p2p_merchant_commerce"] = round(eoa_vol * 100.0 / total_vol, 2) if total_vol > 0 else 0.0
                 agg_row["pct_defi_smart_contract"] = round(contract_vol * 100.0 / total_vol, 2) if total_vol > 0 else 0.0
+                agg_row["pct_contract_payout"] = round(payout_vol * 100.0 / total_vol, 2) if total_vol > 0 else 0.0
 
             else:
                 for key in rows[0].keys():

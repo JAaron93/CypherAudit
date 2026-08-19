@@ -176,6 +176,7 @@ class TestBigQueryAnalyticsClient:
             assert res["data_points"][0]["contract_to_eoa_volume_usd"] == 100.0
             assert res["data_points"][0]["pct_p2p_merchant_commerce"] == 40.0
             assert res["data_points"][0]["pct_defi_smart_contract"] == 50.0
+            assert res["data_points"][0]["pct_contract_payout"] == 10.0
 
     def test_byte_limit_exceeded_handled_gracefully(self):
         with patch("google.cloud.bigquery.Client") as mock_bq:

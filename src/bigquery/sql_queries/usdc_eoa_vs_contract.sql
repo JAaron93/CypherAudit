@@ -22,7 +22,12 @@ SELECT
         eoa_to_contract_volume_usd * 100.0 / 
         NULLIF((eoa_to_eoa_volume_usd + eoa_to_contract_volume_usd + COALESCE(contract_to_eoa_volume_usd, 0)), 0),
         2
-    ) AS pct_defi_smart_contract
+    ) AS pct_defi_smart_contract,
+    ROUND(
+        COALESCE(contract_to_eoa_volume_usd, 0) * 100.0 / 
+        NULLIF((eoa_to_eoa_volume_usd + eoa_to_contract_volume_usd + COALESCE(contract_to_eoa_volume_usd, 0)), 0),
+        2
+    ) AS pct_contract_payout
 FROM
     `{{project_id}}.{{dataset_id}}.usdc_daily_organic_metrics`
 WHERE
