@@ -1,11 +1,11 @@
 # Requirements Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.3.0  
-**Status:** Approved for Implementation  
-**Traceability Base:** `specs/design.md` (v1.3.0)  
+**Document Version:** 1.4.0  
+**Status:** Approved for Implementation (Final Baseline)  
+**Traceability Base:** `specs/design.md` (v1.4.0)  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
-**Scheduler Infrastructure:** Google Cloud Scheduler & BigQuery Scheduled Queries (`0 0 1 * *` UTC)
+**Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### US-1: Empirical Blockchain Researcher
 > *As a* cryptocurrency researcher or data scientist,  
-> *I want to* inspect a decade of Bitcoin UTXO age distributions and USDC organic transaction metrics (from 2014 to 2026 and ongoing into 2027+) via interactive Marimo notebooks with rich \(\LaTeX\) formulations and statistical charts,  
+> *I want to* inspect a decade of Bitcoin UTXO age distributions and USDC organic transaction metrics via interactive, hosted Marimo notebooks (WASM on GitHub Pages / molab) with rich \(\LaTeX\) formulations and statistical charts,  
 > *So that I can* empirically test whether crypto is functioning as an everyday medium of exchange or purely as a speculative store of value.
 
 ### US-2: ASI Agentverse Autonomous Consumer
@@ -23,8 +23,8 @@
 
 ### US-3: System Owner & Cost Administrator
 > *As the* GCP project owner,  
-> *I want* Google Cloud to manage the monthly cron job serverlessly (Cloud Scheduler / BigQuery Scheduled Queries) to ingest only the previous month's delta (<25 GB),  
-> *So that* ingestion runs reliably on Google's infrastructure with 99.99% uptime while keeping monthly GCP query costs completely within the Always-Free Tier ($0.00/month).
+> *I want* Google Cloud to manage the monthly cron job serverlessly and automatically compile the Marimo notebooks to zero-cost WebAssembly (WASM) HTML apps,  
+> *So that* ingestion and public web publishing run 100% automatically with 0 backend servers and $0.00/month ongoing cost.
 
 ---
 
@@ -53,10 +53,12 @@
 * **FR-4.2:** The agent shall register the `blockchain_analytics_protocol_v1` protocol handling `AnalyticsQueryRequest` and returning `AnalyticsQueryResponse`.
 * **FR-4.3:** The agent shall execute BigQuery calls asynchronously (`asyncio.to_thread`) to prevent blocking the event loop.
 
-### FR-5: Marimo Interactive Research Notebooks & Visualizations
+### FR-5: Marimo Interactive Research Notebooks & Cloud/WASM Publishing
 * **FR-5.1:** The system shall provide two reactive Marimo notebooks (`notebooks/btc_analysis.py` and `notebooks/usdc_analysis.py`).
 * **FR-5.2:** Each code cell in the Marimo notebooks must be preceded by an explanatory markdown cell documenting the economic hypothesis, statistical methodology, and \(\LaTeX\) equations.
 * **FR-5.3:** The notebooks shall render interactive publication-quality charts (Plotly) for HODL waves, fee-to-value drag curves, organic vs. bot waterfalls, and counterparty topology.
+* **FR-5.4:** The notebooks shall execute BigQuery data retrieval in dedicated data-loading cells with caching before executing downstream analytical cells.
+* **FR-5.5 (Automated Cloud & WASM Export Publishing):** The system shall provide an export workflow (`marimo export html-wasm --mode run`) to compile notebooks into standalone interactive web apps hosted on **GitHub Pages** / **molab** with 0 backend servers and $0.00 cost.
 
 ---
 
@@ -74,13 +76,14 @@ Feature: Bitcoin UTXO Age Distribution Analysis
     And the response contains percentage bands for "<24h", "1y-2y", and ">2y"
 ```
 
-### BDD-2: Google Cloud Managed Monthly Incremental Ingestion
+### BDD-2: Google Cloud Monthly Ingestion & Marimo WASM Publishing
 ```gherkin
-Feature: Serverless Monthly Incremental Ingestion
-  Scenario: Google Cloud Scheduler triggers monthly BigQuery ingestion (0 0 1 * *)
-    Given the GCP Cloud Scheduler executes at the start of a new month (e.g. 2027-01-01 00:00 UTC)
+Feature: Serverless Monthly Ingestion and Web Publishing
+  Scenario: Cloud Scheduler triggers monthly ingestion and compiles Marimo WASM app
+    Given the GCP Cloud Scheduler executes at the start of a new month (0 0 1 * *)
     When BigQuery runs the scheduled MERGE INTO query for the previous month partition
     Then the job scans only the single previous month delta (<25 GB)
-    And new daily records are merged into btc_daily_utxo_distribution and usdc_daily_organic_metrics
-    And subsequent queries for that month return fresh data with 100% serverless automation
+    And new daily records are merged into the curated datamart
+    And marimo export html-wasm generates updated interactive HTML files in docs/
+    And the updated analysis is automatically visible on GitHub Pages / molab with 0 server costs
 ```

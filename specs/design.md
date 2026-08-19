@@ -1,10 +1,11 @@
 # Architectural Design Specification: On-Chain Analytics Oracle & Blockchain Data Agent
 
-**Document Version:** 1.3.0  
-**Status:** Approved for Implementation  
-**Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks, Python 3.11+  
+**Document Version:** 1.4.0  
+**Status:** Approved for Implementation (Final Baseline)  
+**Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks (WASM / GitHub Pages / molab), Python 3.11+  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`) via `google-genai`  
-**Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)
+**Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
+**Scheduler & Publishing:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Automated Marimo Web Publishing
 
 ---
 
@@ -12,10 +13,11 @@
 
 The primary objective of this project is to build an empirical, reproducible **Blockchain Data Engineering & Analytics Agent** that systematically audits 10+ years of Bitcoin (BTC) and USD Coin (USDC) transaction history. The agent evaluates whether cryptocurrency has achieved organic adoption as an everyday medium of exchange (replacing fiat currency) or whether its utility remains confined to speculative store-of-value accumulation and automated decentralized finance (DeFi) loops.
 
-The project operates through three coordinated delivery surfaces:
-1. **Interactive Marimo Research Notebooks:** High-performance, reactive Python notebooks (`marimo`) executing BigQuery queries, performing statistical hypothesis tests with rich \(\LaTeX\) documentation, and rendering publication-quality interactive visualizations.
-2. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.7 Flash (`gemini-3.7-flash`)** that acts as a public, cost-protected **On-Chain Analytics Oracle** for external agents and researchers on Fetch.ai's Agentverse.
-3. **Google Cloud Managed Ingestion Cron (2027+ Future-Proofing):** A serverless recurring data pipeline managed directly by **Google Cloud Scheduler / BigQuery Scheduled Queries** running on the 1st of every month (`0 0 1 * *` UTC) to ingest new transaction records automatically within GCP.
+The project operates through four coordinated delivery surfaces:
+1. **Interactive Marimo Research Notebooks:** Reactive Python notebooks (`marimo`) executing BigQuery queries, performing statistical hypothesis tests with rich \(\LaTeX\) documentation, and rendering publication-quality interactive visualizations.
+2. **Automated Cloud Hosting & Web Publishing:** Following each monthly data ingestion on the 1st of the month, the pipeline automatically compiles the Marimo notebooks into interactive, standalone WebAssembly web applications (`marimo export html-wasm --mode run`) hosted for free on **GitHub Pages** / **molab** (Marimo's official cloud environment).
+3. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.7 Flash (`gemini-3.7-flash`)** acting as a public, cost-protected **On-Chain Analytics Oracle** on Fetch.ai's Agentverse.
+4. **Google Cloud Managed Ingestion Cron (2027+ Future-Proofing):** A serverless recurring data pipeline managed directly by **Google Cloud Scheduler / BigQuery Scheduled Queries** running on the 1st of every month (`0 0 1 * *` UTC).
 
 ---
 
@@ -71,7 +73,7 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
 
 ---
 
-## 3. System Architecture: GCP Managed Scheduling & Analytics Flow
+## 3. End-to-End System Architecture
 
 ```
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -79,14 +81,7 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
  │                  (Managed natively by GCP Cloud Scheduler / BigQuery)                  │
  └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                              │
-                       ┌─────────────────────┴─────────────────────┐
-                       ▼                                           ▼
-          `bigquery-public-data.crypto_bitcoin`       `bigquery-public-data.crypto_ethereum`
-             (Scoped Month M-1 Extract)                  (Scoped Month M-1 Extract)
-                       │                                           │
-                       └─────────────────────┬─────────────────────┘
-                                             │
-                                             │ Serverless MERGE INTO (< 25 GB Scanned)
+                                             │ 1. Serverless MERGE INTO (< 25 GB Scanned)
                                              ▼
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
  │                      CURATED ANALYTICAL DATAMART (< 30 MB Total)                       │
@@ -100,22 +95,33 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
  └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                              │
                        ┌─────────────────────┴─────────────────────┐
+                       │ 2. Trigger Post-Ingestion Analysis        │ 3. Runtime API Queries (<5MB)
                        ▼                                           ▼
  ┌───────────────────────────────────────────┐ ┌──────────────────────────────────────────┐
- │    MARIMO REACTIVE RESEARCH NOTEBOOKS     │ │  uAGENTS / AGENTVERSE ANALYTICS ORACLE   │
+ │    MARIMO CLOUD / WASM PUBLISHING PIPELINE │ │  uAGENTS / AGENTVERSE ANALYTICS ORACLE   │
  ├───────────────────────────────────────────┤ ├──────────────────────────────────────────┤
- │ • Interactive UI & Parameter Sliders      │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │
- │ • LaTeX Statistical Formulations          │ │ • In-Memory Rate Limiter (Token Bucket)  │
- │ • Plotly Publication Charts               │ │ • BigQuery Client (`max_bytes=50MB`)     │
+ │ • Automated `marimo export html-wasm`     │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │
+ │ • Interactive UI (Plotly & LaTeX)         │ │ • In-Memory Rate Limiter (Token Bucket)  │
+ │ • Hosted on GitHub Pages / molab          │ │ • BigQuery Client (`max_bytes=50MB`)     │
+ │ • Zero-Cost ($0.00), Instant Web Access   │ │ • ASI Agentverse Mailbox & Almanac       │
  └───────────────────────────────────────────┘ └──────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Google Cloud Native Scheduling Architecture
+## 4. Marimo Hosting & Publishing Architecture
 
-By leveraging **Google Cloud Scheduler** and **BigQuery Scheduled Queries**, the pipeline achieves:
-1. **100% Serverless Reliability:** Ingestion does not depend on local machines or long-running python daemons remaining online.
-2. **Deterministic Schedule:** Triggers on the 1st of every month at `00:00 UTC` (`0 0 1 * *`).
-3. **Automated Partition Updates:** Scopes execution dynamically to `DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)`, ensuring zero manual configuration month-to-month.
-4. **Cost Containment:** Each monthly run scans only \(\sim 20\text{--}25\text{ GB}\) per month (\(<\$0.15\)), well within the **1,000 GB Always-Free monthly tier**.
+### 4.1 Automated WebAssembly (WASM) Deployment
+* **Command:** `marimo export html-wasm notebooks/btc_analysis.py -o docs/index.html --mode run`
+* **Hosting Surface:** GitHub Pages (serving directly from the `docs/` directory of the `CypherAudit` repository) and Marimo's official cloud platform (**molab**).
+* **Cost & Ops:** **$0.00/month**. The notebook runs client-side in the browser via Pyodide/WASM, rendering all reactive sliders, Plotly charts, and LaTeX equations instantly without any standing server.
+
+---
+
+## 5. Security Hardening & Cost Protection
+
+1. **Hard Byte Limit (`maximum_bytes_billed`):** 50 MB ceiling on analytical queries; 50 GB ceiling on incremental monthly batch ETL.
+2. **Strict Query Parameterization:** Zero dynamic SQL string concatenation.
+3. **Leaky Bucket Rate Limiting:** 5 req/min and 30 req/day per agent.
+4. **Least-Privilege GCP IAM:** Read-only data viewer on datamart.
+5. **In-Memory LRU Cache:** 0ms cached query responses.

@@ -1,11 +1,11 @@
 # Implementation Tasks & Test-Driven Execution Plan: On-Chain Analytics Oracle
 
-**Document Version:** 1.3.0  
-**Status:** Approved for Implementation  
-**Traceability Base:** `specs/design.md` (v1.3.0) & `specs/requirements.md` (v1.3.0)  
+**Document Version:** 1.4.0  
+**Status:** Approved for Implementation (Final Baseline)  
+**Traceability Base:** `specs/design.md` (v1.4.0) & `specs/requirements.md` (v1.4.0)  
 **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
-**Scheduler Infrastructure:** Google Cloud Scheduler & BigQuery Scheduled Queries (`0 0 1 * *` UTC)
+**Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
 
 ---
 
@@ -32,8 +32,8 @@ The implementation plan is organized into **7 modular execution tracks** with ex
                                        │
                   ┌────────────────────┴────────────────────┐
                   ▼                                         ▼
-   TRACK 6: E2E Verification & PR          TRACK 7: Marimo Notebooks
-   (Integration Testing & Review)          (Interactive LaTeX & Plots)
+   TRACK 6: E2E Verification & PR          TRACK 7: Marimo Notebooks & WASM
+   (Integration Testing & Review)          (Interactive LaTeX & Web Deploy)
 ```
 
 ---
@@ -162,7 +162,7 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 
 ---
 
-## Track 7: Marimo Interactive Research Notebooks & Empirical Visualizations
+## Track 7: Marimo Interactive Research Notebooks & Cloud/WASM Publishing
 
 ### Task 7.1: Marimo & Visualization Dependency Configuration
 * **Description:** Update `pyproject.toml` with `marimo`, `plotly`, `pandas`, and `scipy` dependencies.
@@ -187,3 +187,9 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Dependencies:** Task 7.2, Task 7.3.
 * **Traceability:** FR-5.4, NFR-2.
 * **Artifacts:** `tests/test_notebooks.py`.
+
+### Task 7.5: Automated Marimo WASM Export & GitHub Pages / molab Publishing Pipeline
+* **Description:** Create `scripts/export_marimo_wasm.py` to automate compiling notebooks into zero-cost standalone interactive WebAssembly apps (`marimo export html-wasm --mode run`) into `docs/` for instant deployment to GitHub Pages and molab.
+* **Dependencies:** Task 7.2, Task 7.3, Task 7.4.
+* **Traceability:** FR-5.5, US-1, US-3, BDD-2.
+* **Artifacts:** `scripts/export_marimo_wasm.py`.
