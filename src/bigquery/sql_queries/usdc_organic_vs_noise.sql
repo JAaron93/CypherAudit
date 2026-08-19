@@ -14,11 +14,11 @@ SELECT
     organic_transfer_count,
     ROUND(raw_volume_usd, 2) AS raw_volume_usd,
     ROUND(organic_volume_usd, 2) AS organic_volume_usd,
-    ROUND(organic_volume_ratio * 100.0, 2) AS organic_volume_pct,
-    ROUND((1.0 - organic_volume_ratio) * 100.0, 2) AS automated_noise_pct,
-    ROUND(retail_volume_under_500usd, 2) AS retail_volume_under_500usd,
+    ROUND(COALESCE(organic_volume_ratio, 0.0) * 100.0, 2) AS organic_volume_pct,
+    ROUND((1.0 - COALESCE(organic_volume_ratio, 0.0)) * 100.0, 2) AS automated_noise_pct,
+    ROUND(COALESCE(retail_volume_under_500usd, 0.0), 2) AS retail_volume_under_500usd,
     ROUND(
-        retail_volume_under_500usd * 100.0 / NULLIF(organic_volume_usd, 0),
+        COALESCE(retail_volume_under_500usd, 0.0) * 100.0 / NULLIF(organic_volume_usd, 0),
         2
     ) AS pct_retail_of_organic
 FROM
