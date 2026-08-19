@@ -64,9 +64,9 @@ class TestBigQueryAnalyticsClient:
             mock_bq.return_value = mock_instance
 
             mock_rows = [
-                {"date": "2025-01-01", "raw_volume_usd": 1000.0, "organic_volume_pct": 30.0},
-                {"date": "2025-01-15", "raw_volume_usd": 2000.0, "organic_volume_pct": 40.0},
-                {"date": "2025-02-01", "raw_volume_usd": 5000.0, "organic_volume_pct": 25.0},
+                {"date": "2025-01-01", "raw_volume_usd": 1000.0, "organic_volume_usd": 300.0, "raw_transfer_count": 10, "organic_transfer_count": 8},
+                {"date": "2025-01-15", "raw_volume_usd": 2000.0, "organic_volume_usd": 800.0, "raw_transfer_count": 20, "organic_transfer_count": 15},
+                {"date": "2025-02-01", "raw_volume_usd": 5000.0, "organic_volume_usd": 1250.0, "raw_transfer_count": 50, "organic_transfer_count": 30},
             ]
             mock_query_job = MagicMock()
             mock_query_job.result.return_value = mock_rows
@@ -85,8 +85,11 @@ class TestBigQueryAnalyticsClient:
             assert len(res["data_points"]) == 2
             assert res["data_points"][0]["period"] == "2025-01"
             assert res["data_points"][0]["raw_volume_usd"] == 3000.0
-            assert res["data_points"][0]["organic_volume_pct"] == 35.0  # (30+40)/2
+            assert res["data_points"][0]["organic_volume_usd"] == 1100.0
+            assert res["data_points"][0]["organic_volume_pct"] == 36.67  # (1100/3000)*100
+            assert res["data_points"][0]["automated_noise_pct"] == 63.33
             assert res["data_points"][1]["period"] == "2025-02"
+            assert res["data_points"][1]["organic_volume_pct"] == 25.0
 
     def test_byte_limit_exceeded_handled_gracefully(self):
         with patch("google.cloud.bigquery.Client") as mock_bq:

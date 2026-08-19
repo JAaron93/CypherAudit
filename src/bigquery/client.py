@@ -102,8 +102,10 @@ class BigQueryAnalyticsClient:
         raw_sql = file_path.read_text(encoding="utf-8")
         return raw_sql.replace("{{project_id}}", self.project_id).replace("{{dataset_id}}", self.dataset_id)
 
-    def _aggregate_granularity(self, results: list[dict[str, Any]], granularity: str) -> list[dict[str, Any]]:
-        """Aggregates daily records into monthly or yearly summaries."""
+    def _aggregate_granularity(
+        self, results: list[dict[str, Any]], granularity: str, query_type: str = ""
+    ) -> list[dict[str, Any]]:
+        """Aggregates daily records into monthly or yearly summaries with mathematically sound weighted ratios."""
         if not results or granularity == "daily":
             return results
 
@@ -117,17 +119,72 @@ class BigQueryAnalyticsClient:
         for period, rows in sorted(grouped.items()):
             n = len(rows)
             agg_row: dict[str, Any] = {"period": period, "observation_count": n}
-            # Collect numeric keys
-            for key in rows[0].keys():
-                if key in {"date", "period"}:
-                    continue
-                vals = [r[key] for r in rows if r.get(key) is not None and isinstance(r.get(key), (int, float))]
-                if not vals:
-                    continue
-                if any(substr in key for substr in ["pct", "ratio", "avg", "drag", "band"]):
-                    agg_row[key] = round(sum(vals) / len(vals), 2)
-                else:
-                    agg_row[key] = round(sum(vals), 2) if isinstance(vals[0], float) else sum(vals)
+
+            # Helper to sum a field
+            def sum_field(field_name: str) -> float:
+                return sum(float(r[field_name]) for r in rows if r.get(field_name) is not None)
+
+            if query_type == "btc_hodl_waves":
+                total_utxos = sum_field("total_active_utxos")
+                agg_row["total_active_utxos"] = int(total_utxos)
+                for band_key in ["pct_under_1d", "pct_1d_to_1w", "pct_1w_to_1m", "pct_1m_to_6m", "pct_6m_to_1y", "pct_1y_to_2y", "pct_over_2y"]:
+                    if band_key in rows[0]:
+                        if total_utxos > 0:
+                            weighted = sum(float(r[band_key]) * float(r.get("total_active_utxos", 1)) for r in rows) / total_utxos
+                            agg_row[band_key] = round(weighted, 2)
+                        else:
+                            agg_row[band_key] = round(sum(float(r[band_key]) for r in rows) / n, 2)
+                agg_row["pct_dormant_supply_over_1y"] = round(agg_row.get("pct_1y_to_2y", 0.0) + agg_row.get("pct_over_2y", 0.0), 2)
+
+            elif query_type == "btc_microtransactions":
+                micro = int(sum_field("micro_tx_count_under_10usd"))
+                retail = int(sum_field("retail_tx_count_10_to_500usd"))
+                whale = int(sum_field("whale_tx_count_over_50kusd"))
+                total_txs = micro + retail + whale
+                agg_row["micro_tx_count_under_10usd"] = micro
+                agg_row["retail_tx_count_10_to_500usd"] = retail
+                agg_row["whale_tx_count_over_50kusd"] = whale
+                agg_row["total_classified_txs"] = total_txs
+                agg_row["pct_microtransactions"] = round(micro * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
+                agg_row["pct_retail_commerce"] = round(retail * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
+                agg_row["pct_whale_institutional"] = round(whale * 100.0 / total_txs, 2) if total_txs > 0 else 0.0
+                avg_fee = round(sum(float(r.get("avg_fee_usd", 0.0)) for r in rows) / n, 2)
+                agg_row["avg_fee_usd"] = avg_fee
+                agg_row["fee_drag_pct_on_10usd_purchase"] = round(avg_fee / 10.0 * 100.0, 2)
+
+            elif query_type == "usdc_organic_volume":
+                raw_count = int(sum_field("raw_transfer_count"))
+                org_count = int(sum_field("organic_transfer_count"))
+                raw_vol = round(sum_field("raw_volume_usd"), 2)
+                org_vol = round(sum_field("organic_volume_usd"), 2)
+                retail_vol = round(sum_field("retail_volume_under_500usd"), 2)
+                agg_row["raw_transfer_count"] = raw_count
+                agg_row["organic_transfer_count"] = org_count
+                agg_row["raw_volume_usd"] = raw_vol
+                agg_row["organic_volume_usd"] = org_vol
+                org_ratio_pct = round(org_vol * 100.0 / raw_vol, 2) if raw_vol > 0 else 0.0
+                agg_row["organic_volume_pct"] = org_ratio_pct
+                agg_row["automated_noise_pct"] = round(100.0 - org_ratio_pct, 2)
+                agg_row["retail_volume_under_500usd"] = retail_vol
+                agg_row["pct_retail_of_organic"] = round(retail_vol * 100.0 / org_vol, 2) if org_vol > 0 else 0.0
+
+            elif query_type == "usdc_eoa_topology":
+                eoa_vol = round(sum_field("eoa_to_eoa_volume_usd"), 2)
+                contract_vol = round(sum_field("eoa_to_contract_volume_usd"), 2)
+                total_vol = eoa_vol + contract_vol
+                agg_row["eoa_to_eoa_volume_usd"] = eoa_vol
+                agg_row["eoa_to_contract_volume_usd"] = contract_vol
+                agg_row["pct_p2p_merchant_commerce"] = round(eoa_vol * 100.0 / total_vol, 2) if total_vol > 0 else 0.0
+                agg_row["pct_defi_smart_contract"] = round(contract_vol * 100.0 / total_vol, 2) if total_vol > 0 else 0.0
+
+            else:
+                for key in rows[0].keys():
+                    if key in {"date", "period"}:
+                        continue
+                    vals = [r[key] for r in rows if r.get(key) is not None and isinstance(r.get(key), (int, float))]
+                    if vals:
+                        agg_row[key] = round(sum(vals) / len(vals), 2) if any(s in key for s in ["pct", "ratio", "avg"]) else round(sum(vals), 2)
+
             aggregated.append(agg_row)
 
         return aggregated
@@ -164,7 +221,7 @@ class BigQueryAnalyticsClient:
         try:
             query_job = self.client.query(raw_sql, job_config=job_config)
             raw_results = [dict(row) for row in query_job.result()]
-            results = self._aggregate_granularity(raw_results, granularity)
+            results = self._aggregate_granularity(raw_results, granularity, query_type=query_type)
             bytes_scanned_mb = float(query_job.total_bytes_billed or 0) / (1024 * 1024)
 
             summary = self._generate_empirical_summary(query_type, results)
