@@ -82,7 +82,7 @@ To enable high-speed queries for external agents while keeping Google Cloud quer
  │ ┌──────────────────────────────────────────┐                                            
  │ │          COGNITIVE LAYER (Gemini)        │                                            
  │ ├──────────────────────────────────────────┤                                            
- │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │                                            
+ │ │ • Gemini 3.8 Flash (`gemini-3.8-flash`)  │                                            
  │ │ • Modular Prompt: `oracle_instructions.md`│                                           
  │ │ • Empirical Macroeconomic Persona        │                                            
  │ │ • Statistical Confidence Interpretations │                                            
@@ -93,7 +93,7 @@ To enable high-speed queries for external agents while keeping Google Cloud quer
 
 1. **Continuous Ingestion Cron:** Cloud Scheduler triggers BigQuery Scheduled Queries on the 1st of every month to merge new blockchain blocks into `crypto_analytics_mart` serverlessly.
 2. **Deterministic Layer (Python / `src/`):** Enforces hard limits, rate limiting, and parameter sanitization without LLM hallucinations.
-3. **Cognitive Layer (Gemini 3.7 Flash / `oracle_instructions.md`):** Interprets structured data payloads into rigorous macroeconomic narratives.
+3. **Cognitive Layer (Gemini 3.8 Flash / `oracle_instructions.md`):** Interprets structured data payloads into rigorous macroeconomic narratives.
 4. **Interactive Research Hub (Marimo / WASM):** Renders reactive hypothesis models and Plotly visualizations published to GitHub Pages and molab at $0.00/mo.
 
 ---

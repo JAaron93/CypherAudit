@@ -9,7 +9,7 @@ This document governs the architecture, development principles, tool routing dis
 * **Project Name:** CypherAudit
 * **Agent Name:** SignalChain Oracle
 * **Target Ecosystem:** Fetch.ai / ASI Agentverse Autonomous Analytics Oracle & Marimo Research Hub
-* **LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`) via `google-genai`
+* **LLM Engine:** Gemini 3.8 Flash (`gemini-3.8-flash`) via `google-genai`
 * **Core Telos:** An empirical, reproducible data engineering and analytics system auditing 10+ years of Bitcoin (BTC) and USD Coin (USDC) transaction history (2014 to 2026+) to determine whether cryptocurrency functions as an everyday medium of exchange or has stagnated into speculative store-of-value accumulation and automated DeFi loops.
 
 ---
@@ -38,7 +38,7 @@ This document governs the architecture, development principles, tool routing dis
  │ • `notebooks/btc_analysis.py`             │ │ • `src/agent/main.py` (uAgents daemon)   │
  │ • `notebooks/usdc_analysis.py`            │ │ • `src/agent/protocols/` (Pydantic v2)   │
  │ • LaTeX formulas & Plotly visualizers     │ │ • `src/agent/security/` (Token Bucket)   │
- │ • Export: `marimo export html-wasm`       │ │ • `src/nl_parser/` (Gemini 3.7 Flash)    │
+ │ • Export: `marimo export html-wasm`       │ │ • `src/nl_parser/` (Gemini 3.8 Flash)    │
  │ • Deploy: GitHub Pages / molab ($0/mo)    │ │ • `src/bigquery/client.py` (LRU Cache)   │
  └───────────────────────────────────────────┘ └──────────────────────────────────────────┘
 ```
@@ -115,7 +115,7 @@ CypherAudit/
 │   │   ├── etl_pipelines.py           # Historical baseline & monthly incremental ETL
 │   │   └── sql_queries/               # Parameterized SQL query templates
 │   └── nl_parser/
-│       └── gemini_router.py           # Gemini 3.7 Flash semantic intent router
+│       └── gemini_router.py           # Gemini 3.8 Flash semantic intent router
 ├── notebooks/
 │   ├── btc_analysis.py                # Marimo Bitcoin UTXO HODL & micro-payment notebook
 │   └── usdc_analysis.py               # Marimo USDC organic volume & topology notebook

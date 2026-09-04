@@ -2,7 +2,11 @@
 
 from unittest.mock import MagicMock, patch
 import pytest
-from src.nl_parser.gemini_router import GeminiQueryRouter, SemanticParsingError
+from src.nl_parser.gemini_router import (
+    DEFAULT_GEMINI_MODEL,
+    GeminiQueryRouter,
+    SemanticParsingError,
+)
 
 
 class TestGeminiQueryRouter:
@@ -36,3 +40,30 @@ class TestGeminiQueryRouter:
 
         with pytest.raises(SemanticParsingError, match="Could not map prompt"):
             router.parse_prompt_fallback("What is the weather in Tokyo tomorrow?")
+
+    def test_default_gemini_model_is_gemini_3_8_flash(self):
+        assert DEFAULT_GEMINI_MODEL == "gemini-3.8-flash"
+
+    def test_router_uses_gemini_3_8_flash_by_default(self):
+        router = GeminiQueryRouter(api_key="mock-key")
+        assert router.model == "gemini-3.8-flash"
+
+    def test_router_accepts_custom_model_parameter(self):
+        router = GeminiQueryRouter(api_key="mock-key", model="custom-gemini-model")
+        assert router.model == "custom-gemini-model"
+
+    def test_parse_prompt_calls_gemini_3_8_flash_api(self):
+        router = GeminiQueryRouter(api_key="mock-key")
+        mock_response = MagicMock()
+        mock_response.text = '{"query_type": "btc_hodl_waves", "start_date": "2025-01-01", "end_date": "2025-12-31", "granularity": "daily"}'
+
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch.object(router, "_get_client", return_value=mock_client):
+            result = router.parse_prompt("Bitcoin dormancy in 2025")
+
+        assert result["query_type"] == "btc_hodl_waves"
+        mock_client.models.generate_content.assert_called_once()
+        _, kwargs = mock_client.models.generate_content.call_args
+        assert kwargs["model"] == "gemini-3.8-flash"

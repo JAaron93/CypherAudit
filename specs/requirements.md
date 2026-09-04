@@ -3,7 +3,7 @@
 **Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
 **Traceability Base:** `specs/design.md` (v1.6.0)  
-**LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
+**LLM Engine:** Gemini 3.8 Flash (`gemini-3.8-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
 
@@ -44,8 +44,8 @@
 * **FR-2.3:** The client shall configure `QueryJobConfig(maximum_bytes_billed=50_000_000, use_query_cache=True)` on every execution.
 * **FR-2.4:** The client shall support true multi-granularity time series aggregation (daily, monthly, yearly) using mathematically weighted period ratios.
 
-### FR-3: Gemini 3.7 Flash Natural Language Query Router
-* **FR-3.1:** The system shall provide a natural language parser (`src/nl_parser/gemini_router.py`) powered explicitly by **Gemini 3.7 Flash (`gemini-3.7-flash`)** via `google-genai`.
+### FR-3: Gemini 3.8 Flash Natural Language Query Router
+* **FR-3.1:** The system shall provide a natural language parser (`src/nl_parser/gemini_router.py`) powered explicitly by **Gemini 3.8 Flash (`gemini-3.8-flash`)** via `google-genai`.
 * **FR-3.2:** The router shall map incoming user/agent prompts into a structured `AnalyticsQueryRequest` with strict type validation.
 
 ### FR-4: ASI Agentverse / uAgents Protocol & Modular Instructions
@@ -63,7 +63,7 @@
 
 ### FR-6: Research Documentation & Architectural Transparency
 * **FR-6.1:** The system shall document empirical conclusions on 10+ years of Bitcoin and USDC data across all 5 research hypotheses in `README.md`.
-* **FR-6.2:** The `README.md` shall feature an end-to-end multi-layer architectural diagram clearly distinguishing the **Deterministic Layer** (Python/BigQuery/Security), **Cognitive Layer** (Gemini 3.7 Flash/Prompts), and **Interactive Layer** (Marimo/WASM).
+* **FR-6.2:** The `README.md` shall feature an end-to-end multi-layer architectural diagram clearly distinguishing the **Deterministic Layer** (Python/BigQuery/Security), **Cognitive Layer** (Gemini 3.8 Flash/Prompts), and **Interactive Layer** (Marimo/WASM).
 
 ---
 

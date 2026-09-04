@@ -3,7 +3,7 @@
 **Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
 **Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks (WASM / GitHub Pages / molab), Python 3.11+  
-**LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`) via `google-genai`  
+**LLM Engine:** Gemini 3.8 Flash (`gemini-3.8-flash`) via `google-genai`  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Publishing:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Automated Marimo Web Publishing
 
@@ -16,7 +16,7 @@ The primary objective of this project is to build an empirical, reproducible **B
 The project operates through four coordinated delivery surfaces:
 1. **Interactive Marimo Research Notebooks:** Reactive Python notebooks (`marimo`) executing BigQuery queries, performing statistical hypothesis tests with rich \(\LaTeX\) documentation, and rendering publication-quality interactive visualizations.
 2. **Automated Cloud Hosting & Web Publishing:** Following each monthly data ingestion on the 1st of the month, the pipeline automatically compiles the Marimo notebooks into interactive, standalone WebAssembly web applications (`marimo export html-wasm --mode run`) hosted for free on **GitHub Pages** / **molab** (Marimo's official cloud environment).
-3. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.7 Flash (`gemini-3.7-flash`)** acting as a public, cost-protected **On-Chain Analytics Oracle** on Fetch.ai's Agentverse, driven by modular research persona instructions (`src/agent/prompts/oracle_instructions.md`).
+3. **Autonomous ASI Agentverse Oracle:** A deployed **uAgent** powered by **Gemini 3.8 Flash (`gemini-3.8-flash`)** acting as a public, cost-protected **On-Chain Analytics Oracle** on Fetch.ai's Agentverse, driven by modular research persona instructions (`src/agent/prompts/oracle_instructions.md`).
 4. **Google Cloud Managed Ingestion Cron (2027+ Future-Proofing):** A serverless recurring data pipeline managed directly by **Google Cloud Scheduler / BigQuery Scheduled Queries** running on the 1st of every month (`0 0 1 * *` UTC).
 
 ---
@@ -105,7 +105,7 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
  │ ┌──────────────────────────────────────────┐                                            
  │ │          COGNITIVE LAYER (Gemini)        │                                            
  │ ├──────────────────────────────────────────┤                                            
- │ │ • Gemini 3.7 Flash (`gemini-3.7-flash`)  │                                            
+ │ │ • Gemini 3.8 Flash (`gemini-3.8-flash`)  │                                            
  │ │ • Modular Prompt: `oracle_instructions.md`│                                           
  │ │ • Empirical Macroeconomic Persona        │                                            
  │ │ • Statistical Confidence Interpretations │                                            
