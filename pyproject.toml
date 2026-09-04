@@ -28,3 +28,7 @@ dev = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
+filterwarnings = [
+    "ignore::pydantic.PydanticDeprecatedSince20:uagents_core.*",
+]
+
