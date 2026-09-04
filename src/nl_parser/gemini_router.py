@@ -40,9 +40,10 @@ Return ONLY a JSON object with this exact schema:
 }
 """
 
-    def __init__(self, api_key: str | None = None, model: str | None = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model = model or os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+        env_model = (os.getenv("GEMINI_MODEL") or "").strip()
+        self.model = model or env_model or DEFAULT_GEMINI_MODEL
         self._client = None
 
     def _get_client(self):

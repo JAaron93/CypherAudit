@@ -67,3 +67,19 @@ class TestGeminiQueryRouter:
         mock_client.models.generate_content.assert_called_once()
         _, kwargs = mock_client.models.generate_content.call_args
         assert kwargs["model"] == "gemini-3.8-flash"
+
+    def test_router_uses_env_model_override(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_MODEL", "gemini-custom-env")
+        router = GeminiQueryRouter(api_key="mock-key")
+        assert router.model == "gemini-custom-env"
+
+    def test_router_handles_empty_env_model_with_default_fallback(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_MODEL", "   ")
+        router = GeminiQueryRouter(api_key="mock-key")
+        assert router.model == DEFAULT_GEMINI_MODEL
+
+    def test_router_parameter_takes_precedence_over_env_model(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_MODEL", "gemini-custom-env")
+        router = GeminiQueryRouter(api_key="mock-key", model="gemini-explicit-param")
+        assert router.model == "gemini-explicit-param"
+
