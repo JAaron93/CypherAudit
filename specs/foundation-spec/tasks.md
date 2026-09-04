@@ -1,8 +1,8 @@
 # Implementation Tasks & Test-Driven Execution Plan: On-Chain Analytics Oracle
 
-**Document Version:** 1.4.0  
+**Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
-**Traceability Base:** `specs/design.md` (v1.4.0) & `specs/requirements.md` (v1.4.0)  
+**Traceability Base:** `specs/foundation-spec/design.md` (v1.6.0) & `specs/foundation-spec/requirements.md` (v1.6.0)  
 **LLM Engine:** Gemini 3.8 Flash (`gemini-3.8-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
@@ -120,7 +120,7 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 
 ---
 
-## Track 5: uAgents Protocol & Agentverse Registration Engine
+## Track 5: uAgents Protocol & Agentverse Registration Engine [COMPLETED]
 
 ### Task 5.1 [TDD]: Agentverse Message Protocol Tests [COMPLETED]
 * **Description:** Write tests for `blockchain_analytics_protocol_v1` schemas (`AnalyticsQueryRequest`, `AnalyticsQueryResponse`).
@@ -134,13 +134,13 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Traceability:** FR-4.2, FR-4.3, SEC-1.
 * **Artifacts:** `src/agent/protocols/analytics_protocol.py`.
 
-### Task 5.3: Agent Main Runner & Agentverse Mailbox Registration
+### Task 5.3: Agent Main Runner & Agentverse Mailbox Registration [COMPLETED]
 * **Description:** Implement `src/agent/main.py` configuring the `Agent` instance with cryptographic wallet seed, Agentverse Mailbox endpoint, and startup banner with endpoint metadata.
 * **Dependencies:** Task 5.2.
 * **Traceability:** FR-4.1, NFR-3, US-2, US-3.
 * **Artifacts:** `src/agent/main.py`.
 
-### Task 5.4: SignalChain Oracle Persona & Modular Instructions File
+### Task 5.4: SignalChain Oracle Persona & Modular Instructions File [COMPLETED]
 * **Description:** Create `src/agent/prompts/oracle_instructions.md` decoupling system prompts, research persona, statistical interpretation standards, \(\LaTeX\) rendering rules, and financial disclaimers from Python code, and update `gemini_router.py` / `main.py` to dynamically ingest this instructions file.
 * **Dependencies:** Task 5.3.
 * **Traceability:** FR-4.4, US-1, US-2.
@@ -162,7 +162,7 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Traceability:** US-1, US-2, US-3.
 * **Artifacts:** `README.md`.
 
-### Task 6.3: Comprehensive Multi-Layer Architecture & Pipeline Diagram in README.md
+### Task 6.3: Comprehensive Multi-Layer Architecture & Pipeline Diagram in README.md [COMPLETED]
 * **Description:** Embed the comprehensive multi-layer architectural diagram into `README.md` clearly contrasting the Deterministic Layer, Cognitive Layer, Datamart Ingestion Pipeline, and Marimo Research Hub.
 * **Dependencies:** Task 6.2.
 * **Traceability:** FR-6.2, US-1, US-2.
