@@ -30,7 +30,8 @@ class TestOracleInstructionsPrompt:
 class TestAgentMainRunner:
     """Verifies Agent initialization, protocol attachment, and startup configuration."""
 
-    def test_agent_initialization(self) -> None:
+    @pytest.mark.asyncio
+    async def test_agent_initialization(self) -> None:
         from src.agent.main import create_agent
 
         with patch.dict(

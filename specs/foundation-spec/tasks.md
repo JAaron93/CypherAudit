@@ -3,7 +3,7 @@
 **Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
 **Traceability Base:** `specs/foundation-spec/design.md` (v1.6.0) & `specs/foundation-spec/requirements.md` (v1.6.0)  
-**LLM Engine:** Gemini 3.7 Flash (`gemini-3.7-flash`)  
+**LLM Engine:** Gemini 3.8 Flash (`gemini-3.8-flash`)  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Hosting:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Marimo WebAssembly / GitHub Pages / molab
 
@@ -25,7 +25,7 @@ The implementation plan is organized into **7 modular execution tracks** with ex
                                        │
                   ┌────────────────────┴────────────────────┐
                   ▼                                         ▼
-   TRACK 4: Gemini 3.7 Flash Router        TRACK 5: uAgents Protocol
+   TRACK 4: Gemini 3.8 Flash Router        TRACK 5: uAgents Protocol
    (Intent & Param Mapping)                (Agentverse Integration)
                   │                                         │
                   └────────────────────┬────────────────────┘
@@ -104,7 +104,7 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 
 ---
 
-## Track 4: Gemini 3.7 Flash Natural Language Query Router [COMPLETED]
+## Track 4: Gemini 3.8 Flash Natural Language Query Router [COMPLETED]
 
 ### Task 4.1 [TDD]: Natural Language Semantic Router Tests [COMPLETED]
 * **Description:** Write tests verifying prompt mapping to `AnalyticsQueryRequest` and out-of-scope guidance handling.
@@ -112,8 +112,8 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Traceability:** FR-3.1, FR-3.2.
 * **Artifacts:** `tests/test_gemini_router.py`.
 
-### Task 4.2: Gemini 3.7 Flash Semantic Query Router Implementation [COMPLETED]
-* **Description:** Implement `src/nl_parser/gemini_router.py` using `google-genai` with model `gemini-3.7-flash` and structured JSON output schema.
+### Task 4.2: Gemini 3.8 Flash Semantic Query Router Implementation [COMPLETED]
+* **Description:** Implement `src/nl_parser/gemini_router.py` using `google-genai` with model `gemini-3.8-flash` and structured JSON output schema.
 * **Dependencies:** Task 4.1.
 * **Traceability:** FR-3.1, FR-3.2.
 * **Artifacts:** `src/nl_parser/gemini_router.py`.

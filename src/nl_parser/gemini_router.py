@@ -1,4 +1,4 @@
-"""Gemini Flash Semantic Query Router & Natural Language Parser.
+"""Gemini 3.8 Flash Semantic Query Router & Natural Language Parser.
 
 Translates human-readable analytical questions from Agentverse users into typed,
 sanitized query parameters for the BigQuery Analytics Client.
@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("cypheraudit.nl_parser")
+
+DEFAULT_GEMINI_MODEL: str = "gemini-3.8-flash"
 
 
 class SemanticParsingError(Exception):
@@ -39,8 +41,10 @@ Return ONLY a JSON object with this exact schema:
 }
 """
 
-    def __init__(self, api_key: str | None = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        env_model = (os.getenv("GEMINI_MODEL") or "").strip()
+        self.model = model or env_model or DEFAULT_GEMINI_MODEL
         self._client = None
 
     def _get_client(self):
@@ -50,6 +54,7 @@ Return ONLY a JSON object with this exact schema:
                 self._client = genai.Client(api_key=self.api_key)
             except Exception as e:
                 logger.warning(f"Could not initialize google-genai Client: {e}")
+            return self._client
         return self._client
 
     def get_system_instructions(self) -> str:
@@ -68,7 +73,7 @@ Return ONLY a JSON object with this exact schema:
         if client is not None:
             try:
                 response = client.models.generate_content(
-                    model="gemini-3.7-flash",
+                    model=self.model,
                     contents=prompt,
                     config={
                         "system_instruction": self.get_system_instructions(),
