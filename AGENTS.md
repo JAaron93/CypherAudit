@@ -131,8 +131,8 @@ To maintain strict token economy across long-running sessions, adhere to output-
   * `gh`: Use `--json <field1,field2>` and `--limit <N>` on list/query subcommands (e.g. `gh pr list`, `gh issue list`, `gh run list`).
   * `gcloud`: Use `--format="value(field)"` or `--format="table(field1,field2)"` on list/describe queries.
   * `docker`: Use `--format "{{.ID}}: {{.Names}} ({{.Status}})"` on `ps`, `images`, or `inspect`.
-  For non-query subcommands (e.g., `docker build`, `gcloud auth login`, `gh pr create`), use Unix pipeline filtering (`head`, `grep`, `jq`) or scratch file buffering instead.
-* **Unix Pipeline Filtering:** Filter raw text streams before they reach the model context. Pipe through `jq`, `head -n <N>`, `grep`, `awk`, or `cut` (e.g., `gh run view <id> --log-failed | head -n 50`).
+  For non-query subcommands (e.g., `docker build`, `gh pr create`), buffer outputs to a scratch file rather than piping through filters to prevent masking upstream non-zero exit codes. Never pipe interactive authentication commands (e.g., `gcloud auth login`).
+* **Unix Pipeline Filtering for Diagnostic Output:** Direct Unix pipeline filters (`jq`, `head -n <N>`, `grep`, `awk`, `cut`) are reserved for read-only query and diagnostic streams (e.g., `gh run view <id> --log-failed | head -n 50`). When pipelines are executed in scripts or multi-command chains, ensure exit codes are preserved (e.g., using `set -o pipefail`).
 * **Scratch File Buffering for Large Outputs:** If a diagnostic command or test run generates more than 100 lines of logs, redirect or tee it to the conversation scratch directory and inspect targeted segments with `grep` or `head` rather than dumping the full trace into context.
 * **Atomic Pipelines Over Chatty Turns:** Prefer chaining commands in a single shell invocation using `&&` or pipelines (`|`) rather than executing separate single-command tool calls across multiple conversational turns.
 

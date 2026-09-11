@@ -26,14 +26,14 @@
 - **Architectural Perpetuation Invariant:** Review agents must verify that new tool integrations, agent definitions, or scaffolded workflows adhere to CLI binaries paired with lightweight skills rather than introducing stateless MCP daemons.
 
 ## 5. Universal Version Control, Token Hygiene & PR Boundaries
-- **Feature Branches Only:** All modifications must occur on isolated feature branches. Flag any attempt to commit or push directly to `main` or `master`.
+- **Feature Branches & Worktrees:** All modifications must occur within an isolated git worktree on a dedicated feature branch. Flag any attempt to commit or push directly to `main` or `master`, or perform edits in shared workspace checkouts without worktrees.
 - **Zero Autonomous Merging:** Flag any automated or scripted invocation of `gh pr merge` or API-based pull request merging. Human review and approval are mandatory.
 - **Pre-Commit Hygiene:** Flag commits staging `.env` files, API keys, credentials, or `.sqlite` WAL files.
 - **CLI Output Hygiene & Token Conservation:** Ensure terminal commands and diagnostic scripts enforce bounded output:
   - `gh`: Use `--json <field1,field2>` and `--limit <N>` on list/query subcommands.
   - `gcloud`: Use `--format="value(field)"` or `--format="table(field1,field2)"` on list/describe queries.
   - `docker`: Use `--format "{{.ID}}: {{.Names}} ({{.Status}})"` on `ps`, `images`, or `inspect`.
-  - Non-query subcommands must pipe through Unix stream filters (`jq`, `head -n <N>`, `grep`).
+  - Reserve direct Unix stream filters (`jq`, `head -n <N>`, `grep`) for read-only and diagnostic streams, preserving exit codes (e.g. `set -o pipefail`). Non-query or state-changing commands (`docker build`, `gh pr create`) must buffer to scratch files rather than blind piping to avoid masking upstream failures, and interactive authentication commands (`gcloud auth login`) must never be piped.
 
 ## 6. Automated Review Agent Protocol & Domain Invariants
 - **Domain Invariants for Evals & Security Fixtures:** When reviewing test fixtures, evaluation datasets, or security probes:
