@@ -14,3 +14,31 @@
 ## 3. Test-Driven Development (TDD)
 - Any new feature or bug fix must be covered by unit tests in `tests/`.
 - Ensure mock fixtures are used for cloud APIs (BigQuery, Gemini) in unit test suites to maintain deterministic execution.
+
+## 4. Antigravity 2.0 CLI-First Architecture & Tool Routing Guardrails
+
+> [!NOTE]
+> **Developer Tooling Scope vs. Runtime Application Architecture**:
+> This CLI-first doctrine governs **Software Engineering Agents (SEAs), coding assistants, and developer workflows** (version control, PR management, testing, builds, containers, and environment inspection). The **runtime application itself** runs purely through its native platform SDKs/in-process architecture (e.g., `google.cloud.bigquery`, `google-genai`, `uagents`, `pydantic`); agents and review bots must **never** conflate developer tool routing with runtime application architecture or demand that runtime services shell out to CLI binaries.
+
+- **Scope Demarcation:** Review agents must never flag runtime Python SDK calls (`google.cloud.bigquery`, `google.genai`, `uagents`) as violating CLI-first principles. Developer and orchestration workflows use CLI binaries; runtime services run in-process.
+- **MCP Scope & Stateful Boundaries:** Reserve MCP exclusively for persistent stateful daemons, database connections, AST memory graphs, and the designated Reserved Tier (`codebase-memory-mcp`, `context7`, `chrome-devtools`, `greptile`). Reject stateless MCP servers (e.g. GitHub, Git, Slack, Jira) in favor of native CLI tools (`gh`, `git`, `gcloud`, `aws`, `docker`).
+- **Architectural Perpetuation Invariant:** Review agents must verify that new tool integrations, agent definitions, or scaffolded workflows adhere to CLI binaries paired with lightweight skills rather than introducing stateless MCP daemons.
+
+## 5. Universal Version Control, Token Hygiene & PR Boundaries
+- **Feature Branches & Worktrees:** All modifications must occur within an isolated git worktree on a dedicated feature branch. Flag any attempt to commit or push directly to `main` or `master`, or perform edits in shared workspace checkouts without worktrees.
+- **Zero Autonomous Merging:** Flag any automated or scripted invocation of `gh pr merge` or API-based pull request merging. Human review and approval are mandatory.
+- **Pre-Commit Hygiene:** Flag commits staging `.env` files, API keys, credentials, or `.sqlite` WAL files.
+- **CLI Output Hygiene & Token Conservation:** Ensure terminal commands and diagnostic scripts enforce bounded output:
+  - `gh`: Use `--json <field1,field2>` and `--limit <N>` on list/query subcommands.
+  - `gcloud`: Use `--format="value(field)"` or `--format="table(field1,field2)"` on list/describe queries.
+  - `docker`: Use `--format "{{.ID}}: {{.Names}} ({{.Status}})"` on `ps`, `images`, or `inspect`.
+  - Reserve direct Unix stream filters (`jq`, `head -n <N>`, `grep`) for read-only and diagnostic streams, preserving exit codes (e.g. `set -o pipefail`). Non-query or state-changing commands (`docker build`, `gh pr create`) must buffer to scratch files rather than blind piping to avoid masking upstream failures, and interactive authentication commands (`gcloud auth login`) must never be piped.
+
+## 6. Automated Review Agent Protocol & Domain Invariants
+- **Domain Invariants for Evals & Security Fixtures:** When reviewing test fixtures, evaluation datasets, or security probes:
+  - Do not flag adversarial strings, jailbreaks, or prompt delimiters in golden test cases as active application vulnerabilities.
+  - Do not demand that candidate inputs pass through application sanitizers when the test harness deliberately probes invalid or boundary-breaking inputs.
+  - Recognize graceful exception mapping (`is_fallback = True`, `winner = "tie"`) as legitimate resilience, not "swallowing security errors".
+- **Review Circuit Breaker Hard Gate (10 Reviews / Early Oscillation):** If a review loop reaches 10 iterations or exhibits Catch-22 oscillation, the circuit breaker must be tripped immediately to halt speculative code churn and update review configuration.
+
