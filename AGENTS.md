@@ -40,6 +40,7 @@ This document governs the architecture, development principles, tool routing dis
  │ • LaTeX formulas & Plotly visualizers     │ │ • `src/agent/security/` (Token Bucket)   │
  │ • Export: `marimo export html-wasm`       │ │ • `src/nl_parser/` (Gemini 3.8 Flash)    │
  │ • Deploy: GitHub Pages / molab ($0/mo)    │ │ • `src/bigquery/client.py` (LRU Cache)   │
+ │                                           │ │ • `src/agent/housekeeping.py` (Monitor)  │
  └───────────────────────────────────────────┘ └──────────────────────────────────────────┘
 ```
 
@@ -166,6 +167,7 @@ CypherAudit/
 │   │   │   └── oracle_instructions.md # Decoupled Oracle research persona & synthesis prompt
 │   │   ├── protocols/
 │   │   │   └── analytics_protocol.py  # Pydantic v2 request/response protocol
+│   │   ├── housekeeping.py            # Scheduled freshness probe & usage digest (on_schedule)
 │   │   └── security/
 │   │       ├── circuit_breaker.py     # Parameter validation & circuit breaker
 │   │       └── rate_limiter.py        # Token bucket per-agent rate limiter

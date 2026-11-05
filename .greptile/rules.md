@@ -2,7 +2,7 @@
 
 ## 1. Architectural & Safety Principles
 - **Cost Guardrails & BigQuery Safety:** Every BigQuery query job configuration MUST enforce `maximum_bytes_billed` (default 50 MB ceiling). Full unpartitioned table scans against raw public blockchain datasets without byte ceilings must be flagged as critical severity.
-- **Zero Dynamic SQL / Injection Defense:** SQL queries must strictly use parameterized queries (`google.cloud.bigquery.ScalarQueryParameter`). Never permit dynamic f-string formatting or string concatenation in SQL execution paths.
+- **Zero Dynamic SQL / Injection Defense:** SQL queries must strictly use parameterized queries (`google.cloud.bigquery.ScalarQueryParameter`). Never permit dynamic f-string formatting or string concatenation in SQL execution paths. SQL **identifiers** (project/dataset/table) cannot be query parameters; the sanctioned pattern is allowlist validation via `validate_identifier` followed by substitution into constant `{{placeholder}}` SQL templates (see `BigQueryAnalyticsClient._load_sql_template` and `fetch_table_max_date`). Do not flag this identifier-substitution pattern as dynamic SQL.
 - **Defense-in-Depth Security:** All incoming user inputs (dates, query types, granularities) must pass through `SecurityCircuitBreaker` and `TokenBucketRateLimiter` before initiating cloud I/O.
 - **Cryptographic Identity Isolation:** Never provide public fallback strings for cryptographic seed variables (`AGENT_SEED`). Missing seeds must raise an explicit exception to prevent identity collision and address impersonation.
 

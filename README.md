@@ -76,6 +76,7 @@ To enable high-speed queries for external agents while keeping Google Cloud quer
  │ │ • In-Memory LRU Cache (0ms latency)      │ │ │ • LaTeX Hypotheses & Plotly Charts  │ │
  │ │ • Token Bucket Rate Limiter (`5 req/min`)│ │ │ • `marimo export html-wasm`         │ │
  │ │ • Pydantic v2 A2A Protocols (`uAgents`)  │ │ │ • Hosted on GitHub Pages & molab    │ │
+ │ │ • Scheduled Housekeeping (on_schedule)   │ │ │                                     │ │
  │ └────────────────────┬─────────────────────┘ │ └─────────────────────────────────────┘ │
  │                      │ Filtered Data Payload │                                         │
  │                      ▼                       └─────────────────────────────────────────┘
@@ -92,7 +93,7 @@ To enable high-speed queries for external agents while keeping Google Cloud quer
 ```
 
 1. **Continuous Ingestion Cron:** Cloud Scheduler triggers BigQuery Scheduled Queries on the 1st of every month to merge new blockchain blocks into `crypto_analytics_mart` serverlessly.
-2. **Deterministic Layer (Python / `src/`):** Enforces hard limits, rate limiting, and parameter sanitization without LLM hallucinations.
+2. **Deterministic Layer (Python / `src/`):** Enforces hard limits, rate limiting, and parameter sanitization without LLM hallucinations, and runs daily read-only housekeeping (a datamart freshness probe and usage digest via uAgents cron schedules) that detects when the serverless ingestion pipeline silently stops producing rows.
 3. **Cognitive Layer (Gemini 3.8 Flash / `oracle_instructions.md`):** Interprets structured data payloads into rigorous macroeconomic narratives.
 4. **Interactive Research Hub (Marimo / WASM):** Renders reactive hypothesis models and Plotly visualizations published to GitHub Pages and molab at $0.00/mo.
 
@@ -149,6 +150,7 @@ CypherAudit/
 │   │   ├── prompts/
 │   │   │   └── oracle_instructions.md # Decoupled Oracle research persona & synthesis prompt
 │   │   ├── protocols/         # Message schemas & protocol handlers
+│   │   ├── housekeeping.py    # Scheduled freshness probe & usage digest (on_schedule)
 │   │   └── security/          # Rate limiters & circuit breaker guardrails
 │   ├── bigquery/
 │   │   ├── client.py          # Parameterized client with 50MB byte ceiling & LRU cache
@@ -161,6 +163,7 @@ CypherAudit/
 │   ├── test_security.py       # Rate limiting & circuit breaker tests
 │   ├── test_bigquery_client.py# Byte limit & LRU cache tests
 │   ├── test_gemini_router.py  # NL routing & heuristic fallback tests
+│   ├── test_housekeeping.py   # Freshness state machine & usage digest tests
 │   └── test_protocols.py      # Agentverse protocol schema tests
 ├── .greptile/                 # Greptile automated code review guidelines
 ├── pyproject.toml             # Python dependencies & configuration
