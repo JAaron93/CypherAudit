@@ -1,5 +1,6 @@
 """Unit tests for Parameterized BigQuery Client & Guardrails in SignalChain Oracle."""
 
+from datetime import date
 from unittest.mock import MagicMock, patch
 import pytest
 from src.bigquery.client import BigQueryAnalyticsClient, BigQueryExecutionError, validate_identifier
@@ -248,3 +249,71 @@ class TestBigQueryAnalyticsClient:
                 client.execute_analytics_query(
                     query_type="usdc_organic_volume", start_date="2024-01-01", end_date="2024-12-31"
                 )
+
+
+class TestFreshnessProbe:
+    """Verifies the read-only MAX(date) freshness probe inherits the hard byte ceiling."""
+
+    def test_fetch_table_max_date_returns_iso_string_with_ceiling_enforced(self) -> None:
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_instance = MagicMock()
+            mock_bq.return_value = mock_instance
+
+            mock_query_job = MagicMock()
+            mock_query_job.result.return_value = [{"max_date": date(2026, 10, 31)}]
+            mock_instance.query.return_value = mock_query_job
+
+            client = BigQueryAnalyticsClient(
+                project_id="test-project", dataset_id="crypto_analytics_mart", max_bytes_billed=50_000_000
+            )
+            result = client.fetch_table_max_date("btc_daily_utxo_distribution")
+
+            assert result == "2026-10-31"
+            assert mock_instance.query.call_count == 1
+            sql, kwargs = mock_instance.query.call_args[0][0], mock_instance.query.call_args[1]
+            assert "MAX(date) AS max_date" in sql
+            assert "`test-project.crypto_analytics_mart.btc_daily_utxo_distribution`" in sql
+            assert kwargs["job_config"].maximum_bytes_billed == 50_000_000
+
+    def test_fetch_table_max_date_empty_table_returns_none(self) -> None:
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_instance = MagicMock()
+            mock_bq.return_value = mock_instance
+
+            mock_query_job = MagicMock()
+            mock_query_job.result.return_value = []
+            mock_instance.query.return_value = mock_query_job
+
+            client = BigQueryAnalyticsClient(project_id="test-project")
+
+            assert client.fetch_table_max_date("usdc_daily_organic_metrics") is None
+
+    def test_fetch_table_max_date_null_max_returns_none(self) -> None:
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_instance = MagicMock()
+            mock_bq.return_value = mock_instance
+
+            mock_query_job = MagicMock()
+            mock_query_job.result.return_value = [{"max_date": None}]
+            mock_instance.query.return_value = mock_query_job
+
+            client = BigQueryAnalyticsClient(project_id="test-project")
+
+            assert client.fetch_table_max_date("usdc_daily_organic_metrics") is None
+
+    def test_fetch_table_max_date_wraps_execution_errors(self) -> None:
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_instance = MagicMock()
+            mock_bq.return_value = mock_instance
+            mock_instance.query.side_effect = RuntimeError("connection reset")
+
+            client = BigQueryAnalyticsClient(project_id="test-project")
+
+            with pytest.raises(BigQueryExecutionError, match="Freshness probe failed"):
+                client.fetch_table_max_date("btc_daily_utxo_distribution")
+
+    def test_fetch_table_max_date_rejects_invalid_table_identifier(self) -> None:
+        client = BigQueryAnalyticsClient(project_id="test-project")
+
+        with pytest.raises(BigQueryExecutionError, match="Invalid SQL identifier"):
+            client.fetch_table_max_date("btc_daily_utxo_distribution; DROP TABLE users;--")
