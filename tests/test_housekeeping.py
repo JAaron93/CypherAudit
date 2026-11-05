@@ -230,7 +230,8 @@ class TestGeminiFallbackCounting:
     def _reset_singleton_digest(self) -> None:
         USAGE_DIGEST.render_and_reset()
 
-    def test_unconfigured_router_counts_fallback_degradation(self) -> None:
+    def test_unconfigured_router_counts_fallback_degradation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         router = GeminiQueryRouter(api_key=None)
 
         parsed = router.parse_prompt("tell me about bitcoin hodl waves in 2018")
