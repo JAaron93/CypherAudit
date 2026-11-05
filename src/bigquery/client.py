@@ -68,6 +68,12 @@ class BigQueryAnalyticsClient:
         "usdc_eoa_topology": "usdc_eoa_vs_contract.sql",
     }
 
+    # Identifiers cannot be query parameters; all three are validated by
+    # validate_identifier before substitution into this read-only template.
+    DATAMART_MAX_DATE_SQL = (
+        "SELECT MAX(date) AS max_date FROM `{{project_id}}.{{dataset_id}}.{{table_name}}`"
+    )
+
     def __init__(
         self,
         project_id: str | None = None,
@@ -277,6 +283,32 @@ class BigQueryAnalyticsClient:
                     f"Billing Guard Triggered: Query exceeded safety ceiling of {self.max_bytes_billed / (1024*1024)} MB."
                 ) from e
             raise BigQueryExecutionError(f"BigQuery execution failed: {err_msg}") from e
+
+    def fetch_table_max_date(self, table_name: str) -> str | None:
+        """Fetches the MAX(date) partition ceiling of a curated datamart table.
+
+        Read-only housekeeping probe for scheduled freshness monitoring; inherits
+        the hard maximum_bytes_billed ceiling and BigQuery execution error mapping.
+        """
+        clean_table = validate_identifier(table_name, "table_name")
+        raw_sql = (
+            self.DATAMART_MAX_DATE_SQL.replace("{{project_id}}", self.project_id)
+            .replace("{{dataset_id}}", self.dataset_id)
+            .replace("{{table_name}}", clean_table)
+        )
+        job_config = bigquery.QueryJobConfig(
+            maximum_bytes_billed=self.max_bytes_billed,
+            use_query_cache=True,
+        )
+
+        try:
+            query_job = self.client.query(raw_sql, job_config=job_config)
+            rows = list(query_job.result())
+            if not rows or rows[0].get("max_date") is None:
+                return None
+            return str(rows[0]["max_date"])
+        except Exception as e:
+            raise BigQueryExecutionError(f"Freshness probe failed for {clean_table}: {e}") from e
 
     def _generate_empirical_summary(self, query_type: str, results: list[dict]) -> str:
         """Generates concise, human-readable empirical summaries from query results."""

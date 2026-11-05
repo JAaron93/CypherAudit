@@ -132,3 +132,31 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
 3. **Leaky Bucket Rate Limiting:** 5 req/min and 30 req/day per agent.
 4. **Least-Privilege GCP IAM:** Read-only data viewer on datamart.
 5. **In-Memory LRU Cache:** 0ms cached query responses.
+
+---
+
+## 6. Scheduled Housekeeping & Datamart Freshness Monitoring
+
+### 6.1 Motivation & Ownership Boundary
+Ingestion ownership remains 100% serverless in GCP (Cloud Scheduler `0 0 1 * *` UTC → BigQuery scheduled `MERGE INTO`). The agent never writes to the datamart and never runs ETL. What the agent *can* do — as the datamart's always-on consumer — is detect when that serverless pipeline silently stops producing rows and report its own runtime health. `src/agent/housekeeping.py` therefore contains read-only, fail-soft monitoring only.
+
+### 6.2 Scheduling Primitives (uAgents 0.26+)
+Both handlers register through the uAgents cron scheduler (`Agent.on_schedule`, powered by `cronsim`, evaluated in UTC by default):
+
+| Handler | Cron (UTC) | Surface |
+| :--- | :--- | :--- |
+| Datamart freshness probe | `0 6 * * *` | `MAX(date)` per curated datamart table |
+| Daily usage/health digest | `30 6 * * *` | One aggregated log line |
+
+### 6.3 Freshness Evaluation Model
+For each table `t ∈ {btc_daily_utxo_distribution, usdc_daily_organic_metrics}` (both `PARTITION BY date`):
+* **Expected ceiling** `C(today)` = last day of the previous calendar month — the partition the monthly MERGE must already have produced.
+* **Observed ceiling** `M(t)` = `SELECT MAX(date) AS max_date`, executed via `BigQueryAnalyticsClient.fetch_table_max_date` under the inherited 50 MB `maximum_bytes_billed` ceiling (metadata-pruned on the partitioned & clustered `date` column).
+* **State machine** (grace `g` = 2 days):
+  * `FRESH` when `M ≥ C`
+  * `PENDING` when `M ≥ C_prev` (end of the month before last) and `today.day ≤ g` — the current monthly cycle may still be in flight
+  * `STALE` otherwise, reporting `days_behind = (C − M).days`
+* Probes execute via `asyncio.to_thread` (async event-loop non-blocking invariant); every failure path logs without raising.
+
+### 6.4 Usage Digest Counters
+A thread-safe `UsageDigest` accumulates counters at the security and execution boundaries — rate-limit rejections, security violations, query errors, queries served, and Gemini→rule-based fallback degradations — and emits a single INFO log line daily, resetting after each emission.

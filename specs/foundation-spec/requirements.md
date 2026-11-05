@@ -65,6 +65,13 @@
 * **FR-6.1:** The system shall document empirical conclusions on 10+ years of Bitcoin and USDC data across all 5 research hypotheses in `README.md`.
 * **FR-6.2:** The `README.md` shall feature an end-to-end multi-layer architectural diagram clearly distinguishing the **Deterministic Layer** (Python/BigQuery/Security), **Cognitive Layer** (Gemini 3.8 Flash/Prompts), and **Interactive Layer** (Marimo/WASM).
 
+### FR-7: Scheduled Housekeeping & Datamart Freshness Monitoring
+* **FR-7.1:** The agent shall register a read-only datamart freshness probe via the uAgents `on_schedule` cron handler, executed daily at 06:00 UTC.
+* **FR-7.2:** The probe shall execute `MAX(date)` ceiling queries against both curated datamart tables (`btc_daily_utxo_distribution`, `usdc_daily_organic_metrics`) under the 50 MB runtime byte ceiling via the parameterized BigQuery client.
+* **FR-7.3:** Freshness evaluation shall compare each table's observed `MAX(date)` against the expected ingestion ceiling (the last day of the previous calendar month, per the `0 0 1 * *` GCP schedule), with a 2-day grace window at month start before flagging staleness.
+* **FR-7.4:** All housekeeping handlers shall be fail-soft: detection failures are logged, never raised, and must not disrupt analytics message-handling availability.
+* **FR-7.5:** The agent shall log a daily usage/health digest at 06:30 UTC summarizing queries served, rate-limit rejections, security violations, query errors, and Gemini→rule-based fallback degradations accumulated since the previous digest.
+
 ---
 
 ## 3. Behavior-Driven Development (BDD) Acceptance Criteria
@@ -91,4 +98,16 @@ Feature: Serverless Monthly Ingestion and Web Publishing
     And new daily records are merged into the curated datamart
     And marimo export html-wasm generates updated interactive HTML files in docs/
     And the updated analysis is automatically visible on GitHub Pages / molab with 0 server costs
+```
+
+### BDD-4: Daily Datamart Freshness Probe & Usage Digest
+```gherkin
+Feature: Agent-Side Ingestion Staleness Detection
+  Scenario: The GCP monthly ingestion silently stops
+    Given the curated datamart's most recent partition is "2026-09-30"
+    And the current UTC date is "2026-11-05" (beyond the 2-day grace window)
+    When the daily on_schedule freshness probe executes at 06:00 UTC
+    Then the probe reads MAX(date) from both datamart tables under the 50 MB ceiling
+    And the probe logs a STALE warning reporting 31 days behind the expected "2026-10-31" ceiling
+    And the agent continues serving analytics queries without raising
 ```

@@ -9,6 +9,7 @@ import logging
 from dotenv import load_dotenv
 from uagents import Agent, Context
 
+from src.agent.housekeeping import DIGEST_CRON, FRESHNESS_CRON, register_housekeeping
 from src.agent.protocols.analytics_protocol import create_analytics_protocol
 from src.agent.security.circuit_breaker import SecurityCircuitBreaker
 from src.agent.security.rate_limiter import TokenBucketRateLimiter
@@ -73,7 +74,10 @@ def create_agent() -> Agent:
     if protocol is not None:
         agent.include(protocol)
 
-    # 3. Register Startup Event Banner
+    # 3. Register Scheduled Housekeeping (read-only monitoring; ingestion stays in GCP)
+    register_housekeeping(agent, bq_client)
+
+    # 4. Register Startup Event Banner
     @agent.on_event("startup")
     async def startup_handler(ctx: Context) -> None:
         ctx.logger.info("=" * 70)
@@ -82,6 +86,7 @@ def create_agent() -> Agent:
         ctx.logger.info(f"  • Agent Address:  {agent.address}")
         ctx.logger.info(f"  • BigQuery Mart:  {project_id}.{dataset_id}")
         ctx.logger.info(f"  • Rate Limits:    {rate_per_min} req/min, {rate_per_day} req/day")
+        ctx.logger.info(f"  • Housekeeping:   freshness probe {FRESHNESS_CRON} UTC, usage digest {DIGEST_CRON} UTC")
         ctx.logger.info(f"  • Protocols:      blockchain_analytics_protocol_v1")
         ctx.logger.info("=" * 70)
 

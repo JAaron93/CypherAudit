@@ -1,0 +1,173 @@
+"""Scheduled housekeeping for SignalChain Oracle: read-only datamart freshness
+monitoring and runtime usage/health reporting (uAgents 0.26+ ``on_schedule``).
+
+Ingestion ownership stays 100% serverless in GCP (Cloud Scheduler ->
+BigQuery scheduled MERGE). This module never writes to the datamart and never
+runs ETL; it detects when that pipeline silently stops producing rows and
+reports agent runtime health. Every handler is fail-soft: detection failures
+are logged, never raised, so analytics message handling is never disrupted.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
+from threading import Lock
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from uagents import Agent, Context
+
+    from src.bigquery.client import BigQueryAnalyticsClient
+
+FRESHNESS_CRON: str = "0 6 * * *"
+DIGEST_CRON: str = "30 6 * * *"
+DATAMART_TABLES: tuple[str, ...] = (
+    "btc_daily_utxo_distribution",
+    "usdc_daily_organic_metrics",
+)
+GRACE_DAYS: int = 2
+
+DIGEST_COUNTER_KEYS: tuple[str, ...] = (
+    "queries_served",
+    "rate_limited",
+    "security_violations",
+    "query_errors",
+    "gemini_fallbacks",
+)
+
+
+class UsageDigest:
+    """Thread-safe accumulator for the daily usage/health digest.
+
+    Counters are incremented at the agent's security and execution boundaries
+    and emitted as a single INFO log line by the daily scheduled handler, which
+    resets them after each emission.
+    """
+
+    def __init__(self) -> None:
+        self._counts: dict[str, int] = dict.fromkeys(DIGEST_COUNTER_KEYS, 0)
+        self._lock = Lock()
+
+    def record(self, key: str, amount: int = 1) -> None:
+        with self._lock:
+            self._counts[key] = self._counts.get(key, 0) + amount
+
+    def snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self._counts)
+
+    def render_and_reset(self) -> str:
+        with self._lock:
+            line = "📊 Daily Usage Digest — " + " | ".join(
+                f"{key}={self._counts[key]}" for key in DIGEST_COUNTER_KEYS
+            )
+            self._counts = dict.fromkeys(DIGEST_COUNTER_KEYS, 0)
+            return line
+
+
+USAGE_DIGEST = UsageDigest()
+
+
+@dataclass(frozen=True)
+class FreshnessReport:
+    """Outcome of comparing a table's observed MAX(date) against the expected ceiling."""
+
+    table_name: str
+    max_date: date | None
+    expected_ceiling: date
+    status: str
+    days_behind: int
+
+
+def expected_data_ceiling(today: date) -> date:
+    """Returns the last day of the previous calendar month (the monthly MERGE target)."""
+    first_of_current = today.replace(day=1)
+    return first_of_current - timedelta(days=1)
+
+
+def previous_data_ceiling(today: date) -> date:
+    """Returns the last day of the month before the previous one."""
+    prev_month_end = expected_data_ceiling(today)
+    return prev_month_end.replace(day=1) - timedelta(days=1)
+
+
+def evaluate_freshness(
+    table_name: str,
+    max_date: date | None,
+    today: date,
+    grace_days: int = GRACE_DAYS,
+) -> FreshnessReport:
+    """Evaluates ingestion staleness for one datamart table.
+
+    States:
+      FRESH  - observed MAX(date) covers the expected monthly ceiling.
+      PENDING - within the grace window at month start and at most one monthly
+                cycle behind (the in-flight cycle may not have landed yet).
+      STALE  - the GCP scheduled ingestion appears to have stopped.
+    """
+    ceiling = expected_data_ceiling(today)
+    if max_date is None:
+        return FreshnessReport(table_name, None, ceiling, "STALE", 0)
+    if max_date >= ceiling:
+        return FreshnessReport(table_name, max_date, ceiling, "FRESH", 0)
+
+    days_behind = (ceiling - max_date).days
+    if today.day <= grace_days and max_date >= previous_data_ceiling(today):
+        return FreshnessReport(table_name, max_date, ceiling, "PENDING", days_behind)
+    return FreshnessReport(table_name, max_date, ceiling, "STALE", days_behind)
+
+
+def _log_freshness_report(ctx: Context, report: FreshnessReport) -> None:
+    if report.status == "STALE":
+        ctx.logger.warning(
+            f"🚨 DATAMART STALE: {report.table_name} current through {report.max_date}, "
+            f"expected {report.expected_ceiling} ({report.days_behind} days behind) — "
+            f"GCP scheduled ingestion may have stopped."
+        )
+    elif report.status == "PENDING":
+        ctx.logger.info(
+            f"⏳ Datamart PENDING: {report.table_name} current through {report.max_date}; "
+            f"ingestion cycle for {report.expected_ceiling.strftime('%Y-%m')} still within grace window."
+        )
+    else:
+        ctx.logger.info(
+            f"✅ Datamart FRESH: {report.table_name} current through {report.max_date} "
+            f"(expected {report.expected_ceiling})."
+        )
+
+
+async def run_freshness_probe(
+    ctx: Context,
+    bq_client: BigQueryAnalyticsClient,
+    *,
+    today: date | None = None,
+) -> None:
+    """Probes MAX(date) for every curated datamart table. Fail-soft by contract."""
+    effective_today = today or datetime.now(timezone.utc).date()
+    for table_name in DATAMART_TABLES:
+        try:
+            raw_max_date = await asyncio.to_thread(bq_client.fetch_table_max_date, table_name)
+            max_date = date.fromisoformat(raw_max_date) if raw_max_date else None
+            _log_freshness_report(ctx, evaluate_freshness(table_name, max_date, effective_today))
+        except Exception as e:
+            ctx.logger.error(f"Freshness probe failed for {table_name} (fail-soft): {e}")
+
+
+async def run_usage_digest(ctx: Context, digest: UsageDigest | None = None) -> None:
+    """Emits and resets the accumulated usage/health counters as one log line."""
+    active_digest = digest or USAGE_DIGEST
+    ctx.logger.info(active_digest.render_and_reset())
+
+
+def register_housekeeping(agent: Agent, bq_client: BigQueryAnalyticsClient) -> None:
+    """Registers the daily freshness probe and usage digest cron handlers (UTC)."""
+
+    @agent.on_schedule(FRESHNESS_CRON)
+    async def datamart_freshness_probe(ctx: Context) -> None:
+        await run_freshness_probe(ctx, bq_client)
+
+    @agent.on_schedule(DIGEST_CRON)
+    async def daily_usage_digest(ctx: Context) -> None:
+        await run_usage_digest(ctx)
