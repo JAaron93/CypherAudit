@@ -17,7 +17,7 @@ from threading import Lock
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from uagents import Context
+    from uagents import Agent, Context
 
     from src.bigquery.client import BigQueryAnalyticsClient
 
@@ -159,3 +159,15 @@ async def run_usage_digest(ctx: Context, digest: UsageDigest | None = None) -> N
     """Emits and resets the accumulated usage/health counters as one log line."""
     active_digest = digest or USAGE_DIGEST
     ctx.logger.info(active_digest.render_and_reset())
+
+
+def register_housekeeping(agent: Agent, bq_client: BigQueryAnalyticsClient) -> None:
+    """Registers the daily freshness probe and usage digest cron handlers (UTC)."""
+
+    @agent.on_schedule(FRESHNESS_CRON)
+    async def datamart_freshness_probe(ctx: Context) -> None:
+        await run_freshness_probe(ctx, bq_client)
+
+    @agent.on_schedule(DIGEST_CRON)
+    async def daily_usage_digest(ctx: Context) -> None:
+        await run_usage_digest(ctx)

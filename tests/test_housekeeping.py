@@ -3,15 +3,19 @@
 import threading
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.agent.housekeeping import (
     DATAMART_TABLES,
+    DIGEST_CRON,
+    FRESHNESS_CRON,
     USAGE_DIGEST,
     UsageDigest,
     evaluate_freshness,
     expected_data_ceiling,
+    register_housekeeping,
     run_freshness_probe,
     run_usage_digest,
 )
@@ -241,3 +245,18 @@ class TestGeminiFallbackCounting:
 
         assert parsed["query_type"] == "usdc_organic_volume"
         assert USAGE_DIGEST.snapshot()["gemini_fallbacks"] == 0
+
+
+class TestScheduleWiring:
+    """Smoke-verifies the on_schedule registration contract against uAgents 0.26+."""
+
+    @pytest.mark.asyncio
+    async def test_register_housekeeping_attaches_cron_handlers(self) -> None:
+        from uagents import Agent
+
+        agent = Agent(name="housekeeping-smoke", seed="housekeeping smoke test seed 1234")
+
+        register_housekeeping(agent, MagicMock())
+
+        assert FRESHNESS_CRON == "0 6 * * *"
+        assert DIGEST_CRON == "30 6 * * *"
