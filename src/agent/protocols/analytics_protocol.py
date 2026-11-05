@@ -4,6 +4,8 @@ import asyncio
 from typing import Any
 from pydantic import BaseModel, Field
 
+from src.agent.housekeeping import USAGE_DIGEST
+
 
 class AnalyticsQueryRequest(BaseModel):
     """Structured request payload for the SignalChain Analytics Oracle."""
@@ -46,6 +48,7 @@ def create_analytics_protocol(bigquery_client, rate_limiter, circuit_breaker):
         allowed, reason = rate_limiter.check_rate_limit(sender)
         if not allowed:
             ctx.logger.warning(f"Rate limit exceeded for sender {sender}: {reason}")
+            USAGE_DIGEST.record("rate_limited")
             await ctx.send(
                 sender,
                 AnalyticsQueryResponse(
@@ -70,6 +73,7 @@ def create_analytics_protocol(bigquery_client, rate_limiter, circuit_breaker):
                 granularity=msg.granularity,
             )
         except Exception as e:
+            USAGE_DIGEST.record("security_violations")
             await ctx.send(
                 sender,
                 AnalyticsQueryResponse(
@@ -106,7 +110,9 @@ def create_analytics_protocol(bigquery_client, rate_limiter, circuit_breaker):
                     reproducible_sql=result["reproducible_sql"],
                 ),
             )
+            USAGE_DIGEST.record("queries_served")
         except Exception as e:
+            USAGE_DIGEST.record("query_errors")
             await ctx.send(
                 sender,
                 AnalyticsQueryResponse(

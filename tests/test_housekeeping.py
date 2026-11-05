@@ -1,5 +1,6 @@
 """Unit & BDD tests for Scheduled Housekeeping: Datamart Freshness Monitoring (Track 8)."""
 
+import threading
 from datetime import date
 from types import SimpleNamespace
 
@@ -7,10 +8,14 @@ import pytest
 
 from src.agent.housekeeping import (
     DATAMART_TABLES,
+    USAGE_DIGEST,
+    UsageDigest,
     evaluate_freshness,
     expected_data_ceiling,
     run_freshness_probe,
+    run_usage_digest,
 )
+from src.nl_parser.gemini_router import GeminiQueryRouter
 
 
 class TestExpectedDataCeiling:
@@ -160,3 +165,79 @@ class TestFreshnessProbeHandler:
         assert "btc_daily_utxo_distribution" in errors[0]
         assert "usdc_daily_organic_metrics" in bq.probed_tables
         assert any("FRESH" in msg for _, msg in ctx.logger.records)
+
+
+class TestUsageDigest:
+    """Verifies thread-safe counter accumulation, rendering, and reset."""
+
+    def test_record_increments_named_counters(self) -> None:
+        digest = UsageDigest()
+        digest.record("queries_served")
+        digest.record("queries_served")
+        digest.record("query_errors")
+
+        snapshot = digest.snapshot()
+        assert snapshot["queries_served"] == 2
+        assert snapshot["query_errors"] == 1
+        assert snapshot["rate_limited"] == 0
+
+    def test_render_and_reset_emits_single_line_then_zeroes(self) -> None:
+        digest = UsageDigest()
+        digest.record("queries_served")
+        digest.record("gemini_fallbacks")
+
+        line = digest.render_and_reset()
+
+        assert "\n" not in line
+        assert "queries_served=1" in line
+        assert "gemini_fallbacks=1" in line
+        assert all(value == 0 for value in digest.snapshot().values())
+
+    def test_concurrent_records_are_not_lost(self) -> None:
+        digest = UsageDigest()
+        threads = [
+            threading.Thread(target=lambda: [digest.record("queries_served") for _ in range(50)])
+            for _ in range(4)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert digest.snapshot()["queries_served"] == 200
+
+    @pytest.mark.asyncio
+    async def test_digest_handler_logs_and_resets(self) -> None:
+        digest = UsageDigest()
+        digest.record("rate_limited")
+        ctx = _stub_ctx()
+
+        await run_usage_digest(ctx, digest)
+
+        logged = ctx.logger.records[0][1]
+        assert "rate_limited=1" in logged
+        assert all(value == 0 for value in digest.snapshot().values())
+
+
+class TestGeminiFallbackCounting:
+    """Verifies rule-based fallback degradation is counted on the usage digest."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_singleton_digest(self) -> None:
+        USAGE_DIGEST.render_and_reset()
+
+    def test_unconfigured_router_counts_fallback_degradation(self) -> None:
+        router = GeminiQueryRouter(api_key=None)
+
+        parsed = router.parse_prompt("tell me about bitcoin hodl waves in 2018")
+
+        assert parsed["query_type"] == "btc_hodl_waves"
+        assert USAGE_DIGEST.snapshot()["gemini_fallbacks"] == 1
+
+    def test_direct_fallback_calls_are_not_degradations(self) -> None:
+        router = GeminiQueryRouter(api_key=None)
+
+        parsed = router.parse_prompt_fallback("usdc organic volume 2020")
+
+        assert parsed["query_type"] == "usdc_organic_volume"
+        assert USAGE_DIGEST.snapshot()["gemini_fallbacks"] == 0

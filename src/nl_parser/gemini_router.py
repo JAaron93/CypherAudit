@@ -11,6 +11,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from src.agent.housekeeping import USAGE_DIGEST
+
 logger = logging.getLogger("cypheraudit.nl_parser")
 
 DEFAULT_GEMINI_MODEL: str = "gemini-3.8-flash"
@@ -85,6 +87,9 @@ Return ONLY a JSON object with this exact schema:
             except Exception as e:
                 logger.warning(f"Gemini API call failed, using rule-based parser fallback: {e}")
 
+        # Reached with no client or after an API failure: both are degradations
+        # from cognitive routing to the deterministic rule-based parser.
+        USAGE_DIGEST.record("gemini_fallbacks")
         return self.parse_prompt_fallback(prompt)
 
     def parse_prompt_fallback(self, prompt: str) -> dict[str, str]:

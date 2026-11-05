@@ -29,6 +29,46 @@ DATAMART_TABLES: tuple[str, ...] = (
 )
 GRACE_DAYS: int = 2
 
+DIGEST_COUNTER_KEYS: tuple[str, ...] = (
+    "queries_served",
+    "rate_limited",
+    "security_violations",
+    "query_errors",
+    "gemini_fallbacks",
+)
+
+
+class UsageDigest:
+    """Thread-safe accumulator for the daily usage/health digest.
+
+    Counters are incremented at the agent's security and execution boundaries
+    and emitted as a single INFO log line by the daily scheduled handler, which
+    resets them after each emission.
+    """
+
+    def __init__(self) -> None:
+        self._counts: dict[str, int] = dict.fromkeys(DIGEST_COUNTER_KEYS, 0)
+        self._lock = Lock()
+
+    def record(self, key: str, amount: int = 1) -> None:
+        with self._lock:
+            self._counts[key] = self._counts.get(key, 0) + amount
+
+    def snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self._counts)
+
+    def render_and_reset(self) -> str:
+        with self._lock:
+            line = "📊 Daily Usage Digest — " + " | ".join(
+                f"{key}={self._counts[key]}" for key in DIGEST_COUNTER_KEYS
+            )
+            self._counts = dict.fromkeys(DIGEST_COUNTER_KEYS, 0)
+            return line
+
+
+USAGE_DIGEST = UsageDigest()
+
 
 @dataclass(frozen=True)
 class FreshnessReport:
@@ -113,3 +153,9 @@ async def run_freshness_probe(
             _log_freshness_report(ctx, evaluate_freshness(table_name, max_date, effective_today))
         except Exception as e:
             ctx.logger.error(f"Freshness probe failed for {table_name} (fail-soft): {e}")
+
+
+async def run_usage_digest(ctx: Context, digest: UsageDigest | None = None) -> None:
+    """Emits and resets the accumulated usage/health counters as one log line."""
+    active_digest = digest or USAGE_DIGEST
+    ctx.logger.info(active_digest.render_and_reset())
