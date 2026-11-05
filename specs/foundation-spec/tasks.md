@@ -11,7 +11,7 @@
 
 ## Overview & Execution Tracks
 
-The implementation plan is organized into **7 modular execution tracks** with explicit dependencies, parallelism opportunities, and strict Test-Driven Development (TDD) gates.
+The implementation plan is organized into **8 modular execution tracks** with explicit dependencies, parallelism opportunities, and strict Test-Driven Development (TDD) gates.
 
 ```
                       TRACK 1: Setup & Security Hardening
@@ -34,6 +34,10 @@ The implementation plan is organized into **7 modular execution tracks** with ex
                   ▼                                         ▼
    TRACK 6: E2E Verification & PR          TRACK 7: Marimo Notebooks & WASM
    (Integration Testing & Review)          (Interactive LaTeX & Web Deploy)
+                                             │
+                                             ▼
+                     TRACK 8: Scheduled Housekeeping
+                     (Freshness Probe & Usage Digest)
 ```
 
 ---
@@ -201,3 +205,35 @@ The implementation plan is organized into **7 modular execution tracks** with ex
 * **Dependencies:** Task 7.2, Task 7.3, Task 7.4.
 * **Traceability:** FR-5.5, US-1, US-3, BDD-2.
 * **Artifacts:** `scripts/export_marimo_wasm.py`.
+
+---
+
+## Track 8: Scheduled Housekeeping & Datamart Freshness Monitoring [IN PROGRESS]
+
+### Task 8.1 [TDD]: Datamart Freshness Evaluation & Probe Tests
+* **Description:** Write failing unit tests for the freshness state machine (`FRESH`/`PENDING`/`STALE`, 2-day grace window, calendar-year boundaries) and for `BigQueryAnalyticsClient.fetch_table_max_date` (50 MB ceiling inheritance, empty table → `None`, error wrapping, identifier validation).
+* **Dependencies:** Track 3 (BQ Client & Cache).
+* **Traceability:** FR-7.1, FR-7.2, FR-7.3, FR-7.4, BDD-4.
+* **Artifacts:** `tests/test_housekeeping.py`, `tests/test_bigquery_client.py`.
+* - [ ] Failing tests authored and verified red
+
+### Task 8.2: Freshness Probe Implementation
+* **Description:** Implement `fetch_table_max_date` (template-substituted read-only `MAX(date)` with inherited byte ceiling) and the `src/agent/housekeeping.py` evaluation core (`expected_data_ceiling`, `evaluate_freshness`, `run_freshness_probe`).
+* **Dependencies:** Task 8.1.
+* **Traceability:** FR-7.1, FR-7.2, FR-7.3, FR-7.4.
+* **Artifacts:** `src/bigquery/client.py`, `src/agent/housekeeping.py`.
+* - [ ] Implementation green; full suite passes
+
+### Task 8.3 [TDD]: Usage Digest Counters & Instrumentation
+* **Description:** Write failing unit tests for the thread-safe `UsageDigest` (accumulate, render, reset) and Gemini fallback degradation counting; implement `run_usage_digest` and instrument the analytics protocol security/execution boundaries and the Gemini router fallback paths.
+* **Dependencies:** Task 8.2.
+* **Traceability:** FR-7.4, FR-7.5, BDD-4.
+* **Artifacts:** `src/agent/housekeeping.py`, `src/agent/protocols/analytics_protocol.py`, `src/nl_parser/gemini_router.py`.
+* - [ ] Failing tests verified red, then implementation green; full suite passes
+
+### Task 8.4: uAgents on_schedule Wiring & Startup Banner
+* **Description:** Register the freshness probe (`0 6 * * *` UTC) and usage digest (`30 6 * * *` UTC) handlers in `src/agent/main.py` via `agent.on_schedule`, and extend the startup banner with the housekeeping schedule.
+* **Dependencies:** Task 8.2, Task 8.3.
+* **Traceability:** FR-7.1, FR-7.5.
+* **Artifacts:** `src/agent/main.py`.
+* - [ ] Full suite passes on wired tree; PR opened
