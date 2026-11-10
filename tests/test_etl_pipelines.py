@@ -97,6 +97,14 @@ class TestBaselineEtlPipeline:
         assert "2024-01-01" in calls[2].args[0]
         assert "2025-12-31" in calls[2].args[0]
 
+    def test_inverted_annual_window_is_skipped(self, mock_bq_client) -> None:
+        # validate_date checks shape only; a month-13 start inverts the first annual window
+        run_etl_pipeline("test-project", start_date="2024-13-01", end_date="2025-01-31", dry_run=True)
+        calls = mock_bq_client.query.call_args_list
+        assert len(calls) == 2
+        assert "2025-01-01" in calls[0].args[0]
+        assert "2025-01-31" in calls[0].args[0]
+
     def test_main_entrypoint_dry_runs_full_backfill(self, monkeypatch, mock_bq_client) -> None:
         monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
         monkeypatch.delitem(sys.modules, "src.bigquery.etl_pipelines")

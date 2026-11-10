@@ -143,3 +143,13 @@ class TestSecurityCircuitBreaker:
             SecurityCircuitBreaker().sanitize_request_params(
                 "arbitrary_raw_sql", "2025-01-01", "2025-12-31"
             )
+
+    @pytest.mark.parametrize("date_str", ["2008-12-31", "2031-01-01"])
+    def test_date_outside_historical_range_raises(self, date_str) -> None:
+        with pytest.raises(SecurityViolationError, match="out of historical range"):
+            SecurityCircuitBreaker().validate_date(date_str)
+
+    def test_historical_range_boundaries_are_inclusive(self) -> None:
+        breaker = SecurityCircuitBreaker()
+        assert breaker.validate_date("2009-01-01") == "2009-01-01"
+        assert breaker.validate_date("2030-12-31") == "2030-12-31"

@@ -3,7 +3,7 @@
 from datetime import date
 from unittest.mock import MagicMock, patch
 import pytest
-from src.bigquery.client import BigQueryAnalyticsClient, BigQueryExecutionError, validate_identifier
+from src.bigquery.client import BigQueryAnalyticsClient, BigQueryExecutionError, LRUCache, validate_identifier
 
 
 class TestBigQueryAnalyticsClient:
@@ -317,3 +317,146 @@ class TestFreshnessProbe:
 
         with pytest.raises(BigQueryExecutionError, match="Invalid SQL identifier"):
             client.fetch_table_max_date("btc_daily_utxo_distribution; DROP TABLE users;--")
+
+
+class TestLRUCacheLifecycle:
+    """Verifies TTL expiry, capacity eviction, and recency refresh in the thread-safe cache."""
+
+    def test_expired_entry_evicted_on_read(self, monkeypatch) -> None:
+        from src.bigquery import client as client_module
+
+        clock = [1000.0]
+        monkeypatch.setattr(client_module.time, "time", lambda: clock[0])
+        cache = LRUCache(capacity=5, ttl_seconds=60)
+        cache.set("key", "value")
+
+        clock[0] = 1061.0
+        assert cache.get("key") is None
+        assert "key" not in cache.cache
+
+    def test_capacity_evicts_least_recently_used(self) -> None:
+        cache = LRUCache(capacity=2, ttl_seconds=3600)
+        cache.set("a", 1)
+        cache.set("b", 2)
+        cache.set("c", 3)
+
+        assert cache.get("a") is None
+        assert cache.get("b") == 2
+        assert cache.get("c") == 3
+
+    def test_overwrite_refreshes_recency(self) -> None:
+        cache = LRUCache(capacity=2, ttl_seconds=3600)
+        cache.set("a", 1)
+        cache.set("b", 2)
+        cache.set("a", 9)
+        cache.set("c", 3)
+
+        assert cache.get("b") is None
+        assert cache.get("a") == 9
+
+
+def _execute_with_rows(query_type: str, rows: list[dict], granularity: str = "monthly") -> dict:
+    with patch("google.cloud.bigquery.Client") as mock_bq:
+        mock_job = MagicMock()
+        mock_job.result.return_value = rows
+        mock_job.total_bytes_billed = 0
+        mock_bq.return_value.query.return_value = mock_job
+        client = BigQueryAnalyticsClient(project_id="test-project")
+        return client.execute_analytics_query(
+            query_type=query_type,
+            start_date="2025-01-01",
+            end_date="2025-01-31",
+            granularity=granularity,
+        )
+
+
+class TestTemplateAndExecutionErrors:
+    """Verifies template resolution failures and generic error mapping."""
+
+    def test_unregistered_query_type_rejected(self) -> None:
+        client = BigQueryAnalyticsClient(project_id="test-project")
+        with pytest.raises(BigQueryExecutionError, match="No SQL template registered"):
+            client.execute_analytics_query("not_a_query", "2025-01-01", "2025-12-31")
+
+    def test_missing_sql_file_rejected(self, tmp_path) -> None:
+        client = BigQueryAnalyticsClient(project_id="test-project")
+        client.sql_dir = tmp_path
+        with pytest.raises(BigQueryExecutionError, match="SQL file not found"):
+            client.execute_analytics_query("btc_hodl_waves", "2025-01-01", "2025-12-31")
+
+    def test_generic_execution_failure_wrapped(self) -> None:
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            mock_bq.return_value.query.side_effect = RuntimeError("connection reset")
+            client = BigQueryAnalyticsClient(project_id="test-project")
+            with pytest.raises(BigQueryExecutionError, match="BigQuery execution failed: connection reset"):
+                client.execute_analytics_query("btc_hodl_waves", "2025-01-01", "2025-12-31")
+
+    def test_lazy_client_initialized_once(self) -> None:
+        with patch("google.cloud.bigquery.Client") as mock_bq:
+            client = BigQueryAnalyticsClient(project_id="test-project")
+            assert client.client is client.client
+            mock_bq.assert_called_once_with(project="test-project")
+
+
+class TestAggregationDegenerateInputs:
+    """Verifies weighting fallbacks when base denominators are zero or absent."""
+
+    def test_hodl_zero_supply_weights_by_utxo_count(self) -> None:
+        rows = [
+            {"date": "2025-01-01", "total_active_utxos": 100, "total_active_btc_supply": 0.0, "pct_under_1d": 10.0},
+            {"date": "2025-01-02", "total_active_utxos": 300, "total_active_btc_supply": 0.0, "pct_under_1d": 50.0},
+        ]
+        point = _execute_with_rows("btc_hodl_waves", rows)["data_points"][0]
+        assert point["total_active_utxos"] == 400
+        assert "total_active_btc_supply" not in point
+        assert point["pct_under_1d"] == 40.0  # (100*10 + 300*50) / 400
+
+    def test_hodl_zero_supply_and_utxos_uses_simple_average(self) -> None:
+        rows = [
+            {"date": "2025-01-01", "total_active_utxos": 0, "total_active_btc_supply": 0.0, "pct_under_1d": 10.0},
+            {"date": "2025-01-02", "total_active_utxos": 0, "total_active_btc_supply": 0.0, "pct_under_1d": 50.0},
+        ]
+        point = _execute_with_rows("btc_hodl_waves", rows)["data_points"][0]
+        assert point["pct_under_1d"] == 30.0
+
+    def test_micro_total_tx_count_weighting_with_zero_classified(self) -> None:
+        rows = [
+            {"date": "2025-01-01", "total_tx_count": 100, "avg_fee_usd": 2.0},
+            {"date": "2025-01-02", "total_tx_count": 300, "avg_fee_usd": 4.0},
+        ]
+        point = _execute_with_rows("btc_microtransactions", rows)["data_points"][0]
+        assert point["total_tx_count"] == 400
+        assert point["total_classified_txs"] == 0
+        assert point["pct_microtransactions"] == 0.0
+        assert point["avg_fee_usd"] == 3.5  # (100*2 + 300*4) / 400
+
+    def test_micro_zero_activity_averages_daily_fees(self) -> None:
+        rows = [
+            {"date": "2025-01-01", "avg_fee_usd": 2.0},
+            {"date": "2025-01-02", "avg_fee_usd": 4.0},
+        ]
+        point = _execute_with_rows("btc_microtransactions", rows)["data_points"][0]
+        assert point["avg_fee_usd"] == 3.0
+        assert point["fee_drag_pct_on_10usd_purchase"] == 30.0
+
+    def test_empty_result_set_reports_no_data(self) -> None:
+        res = _execute_with_rows("btc_hodl_waves", [])
+        assert res["data_points"] == []
+        assert res["empirical_summary"] == "No data points returned for the specified date range."
+
+    def test_generic_aggregation_sums_counts_and_averages_ratios(self) -> None:
+        client = BigQueryAnalyticsClient(project_id="test-project")
+        rows = [
+            {"date": "2025-01-01", "volume_usd": 100.0, "pct_share": 10.0, "label": "a"},
+            {"date": "2025-01-02", "volume_usd": 300.0, "pct_share": 30.0, "label": None},
+        ]
+        point = client._aggregate_granularity(rows, "monthly", query_type="future_metric")[0]
+        assert point["volume_usd"] == 400.0
+        assert point["pct_share"] == 20.0
+        assert "label" not in point
+        assert "date" not in point
+
+    def test_unknown_query_summary_is_generic(self) -> None:
+        client = BigQueryAnalyticsClient(project_id="test-project")
+        summary = client._generate_empirical_summary("future_metric", [{"date": "2025-01-01"}])
+        assert summary == "Successfully processed 1 records."

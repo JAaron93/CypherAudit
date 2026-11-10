@@ -153,6 +153,21 @@ class TestFreshnessProbeHandler:
         assert "btc_daily_utxo_distribution" in warnings[0]
 
     @pytest.mark.asyncio
+    async def test_probe_logs_pending_within_grace_window(self) -> None:
+        bq = _StubBigQueryClient(
+            {
+                "btc_daily_utxo_distribution": "2026-09-30",
+                "usdc_daily_organic_metrics": "2026-09-30",
+            }
+        )
+        ctx = _stub_ctx()
+
+        await run_freshness_probe(ctx, bq, today=date(2026, 11, 2))
+
+        assert all(level == "INFO" for level, _ in ctx.logger.records)
+        assert sum("PENDING" in msg for _, msg in ctx.logger.records) == 2
+
+    @pytest.mark.asyncio
     async def test_probe_is_fail_soft_and_still_probes_remaining_table(self) -> None:
         bq = _StubBigQueryClient(
             {
@@ -261,3 +276,32 @@ class TestScheduleWiring:
 
         assert FRESHNESS_CRON == "0 6 * * *"
         assert DIGEST_CRON == "30 6 * * *"
+
+    @pytest.mark.asyncio
+    async def test_registered_cron_handlers_execute_probe_and_digest(self) -> None:
+        class StubAgent:
+            def __init__(self) -> None:
+                self.schedules = {}
+
+            def on_schedule(self, cron):
+                def decorator(fn):
+                    self.schedules[cron] = fn
+                    return fn
+                return decorator
+
+        agent = StubAgent()
+        bq = _StubBigQueryClient(
+            {
+                "btc_daily_utxo_distribution": "2026-10-31",
+                "usdc_daily_organic_metrics": "2026-10-31",
+            }
+        )
+        register_housekeeping(agent, bq)
+        assert set(agent.schedules) == {FRESHNESS_CRON, DIGEST_CRON}
+
+        ctx = _stub_ctx()
+        await agent.schedules[FRESHNESS_CRON](ctx)
+        assert bq.probed_tables == list(DATAMART_TABLES)
+
+        await agent.schedules[DIGEST_CRON](ctx)
+        assert any("Daily Usage Digest" in msg for _, msg in ctx.logger.records)
