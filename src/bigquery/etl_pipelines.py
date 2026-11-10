@@ -567,10 +567,9 @@ def run_etl_pipeline(
             ]
 
             for name, sql, ceiling in jobs:
-                job_config = bigquery.QueryJobConfig(
-                    dry_run=dry_run,
-                    maximum_bytes_billed=ceiling if not dry_run else None,
-                )
+                job_config = bigquery.QueryJobConfig(dry_run=dry_run)
+                if not dry_run:
+                    job_config.maximum_bytes_billed = ceiling
                 logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={ceiling})...")
                 query_job = client.query(sql, job_config=job_config)
                 if dry_run:
@@ -589,10 +588,9 @@ def run_etl_pipeline(
             ("USDC Baseline Batch", usdc_sql, usdc_max_bytes_billed),
         ]
         for name, sql, ceiling in jobs:
-            job_config = bigquery.QueryJobConfig(
-                dry_run=dry_run,
-                maximum_bytes_billed=ceiling if not dry_run else None,
-            )
+            job_config = bigquery.QueryJobConfig(dry_run=dry_run)
+            if not dry_run:
+                job_config.maximum_bytes_billed = ceiling
             logger.info(f"Submitting {name} (dry_run={dry_run}, max_bytes_billed={ceiling})...")
             query_job = client.query(sql, job_config=job_config)
             if dry_run:
@@ -635,10 +633,9 @@ def run_monthly_incremental_etl(
     ]
 
     for name, sql, ceiling in jobs:
-        job_config = bigquery.QueryJobConfig(
-            dry_run=dry_run,
-            maximum_bytes_billed=ceiling if not dry_run else None,
-        )
+        job_config = bigquery.QueryJobConfig(dry_run=dry_run)
+        if not dry_run:
+            job_config.maximum_bytes_billed = ceiling
         logger.info(f"Submitting {name} incremental job (dry_run={dry_run}, max_bytes_billed={ceiling})...")
         query_job = client.query(sql, job_config=job_config)
         if dry_run:
