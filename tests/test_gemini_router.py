@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 import pytest
+from src.agent.housekeeping import USAGE_DIGEST
 from src.nl_parser.gemini_router import (
     DEFAULT_GEMINI_MODEL,
     GeminiQueryRouter,
@@ -82,4 +83,64 @@ class TestGeminiQueryRouter:
         monkeypatch.setenv("GEMINI_MODEL", "gemini-custom-env")
         router = GeminiQueryRouter(api_key="mock-key", model="gemini-explicit-param")
         assert router.model == "gemini-explicit-param"
+
+
+class TestGeminiClientLifecycle:
+    """Verifies lazy google-genai client initialization, caching, and failure handling."""
+
+    def test_client_initialized_once_and_cached(self) -> None:
+        router = GeminiQueryRouter(api_key="mock-key")
+        with patch("google.genai.Client") as mock_genai:
+            first = router._get_client()
+            second = router._get_client()
+        assert first is mock_genai.return_value
+        assert second is first
+        mock_genai.assert_called_once_with(api_key="mock-key")
+
+    def test_initialization_failure_returns_none(self) -> None:
+        router = GeminiQueryRouter(api_key="mock-key")
+        with patch("google.genai.Client", side_effect=RuntimeError("invalid credentials")):
+            assert router._get_client() is None
+
+    def test_missing_api_key_skips_client_creation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        router = GeminiQueryRouter()
+        assert router._get_client() is None
+
+
+class TestRouterDegradationPaths:
+    """Verifies graceful degradation to the embedded prompt and rule-based parser."""
+
+    def test_missing_instructions_file_falls_back_to_embedded_prompt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        router = GeminiQueryRouter(api_key="mock-key")
+        monkeypatch.setattr("pathlib.Path.exists", lambda self: False)
+        assert router.get_system_instructions() == router.SYSTEM_INSTRUCTION
+
+    def test_instructions_read_failure_falls_back_to_embedded_prompt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        router = GeminiQueryRouter(api_key="mock-key")
+        monkeypatch.setattr("pathlib.Path.exists", lambda self: True)
+
+        def unreadable(self, encoding: str | None = None, errors: str | None = None) -> None:
+            raise OSError("disk unreadable")
+
+        monkeypatch.setattr("pathlib.Path.read_text", unreadable)
+        assert router.get_system_instructions() == router.SYSTEM_INSTRUCTION
+
+    def test_api_failure_degrades_to_rule_based_parser_and_counts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        router = GeminiQueryRouter(api_key="mock-key")
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = RuntimeError("503 unavailable")
+        monkeypatch.setattr(router, "_get_client", lambda: mock_client)
+        before = USAGE_DIGEST.snapshot()["gemini_fallbacks"]
+
+        result = router.parse_prompt("bitcoin hodl waves in 2025")
+
+        assert result["query_type"] == "btc_hodl_waves"
+        assert USAGE_DIGEST.snapshot()["gemini_fallbacks"] == before + 1
+
+    def test_fallback_maps_eoa_topology_keywords(self) -> None:
+        router = GeminiQueryRouter(api_key=None)
+        result = router.parse_prompt_fallback("Show merchant p2p settlement topology")
+        assert result["query_type"] == "usdc_eoa_topology"
+        assert result["start_date"] == "2025-01-01"
 
