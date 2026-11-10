@@ -107,11 +107,11 @@ class TestSecurityCircuitBreaker:
                 breaker.validate_date(bad_input)
 
     @pytest.mark.parametrize("granularity", ["daily", "monthly", "yearly", "MONTHLY", "Daily"])
-    def test_valid_granularities_pass(self, granularity) -> None:
+    def test_valid_granularities_pass(self, granularity: str) -> None:
         assert SecurityCircuitBreaker().validate_granularity(granularity) is True
 
     @pytest.mark.parametrize("granularity", ["hourly", "weekly", "", None, 42, "daily; DROP"])
-    def test_invalid_granularities_raise(self, granularity) -> None:
+    def test_invalid_granularities_raise(self, granularity: object) -> None:
         with pytest.raises(SecurityViolationError, match="Unauthorized granularity"):
             SecurityCircuitBreaker().validate_granularity(granularity)
 
@@ -145,7 +145,7 @@ class TestSecurityCircuitBreaker:
             )
 
     @pytest.mark.parametrize("date_str", ["2008-12-31", "2031-01-01"])
-    def test_date_outside_historical_range_raises(self, date_str) -> None:
+    def test_date_outside_historical_range_raises(self, date_str: str) -> None:
         with pytest.raises(SecurityViolationError, match="out of historical range"):
             SecurityCircuitBreaker().validate_date(date_str)
 

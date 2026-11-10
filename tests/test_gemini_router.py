@@ -102,7 +102,7 @@ class TestGeminiClientLifecycle:
         with patch("google.genai.Client", side_effect=RuntimeError("invalid credentials")):
             assert router._get_client() is None
 
-    def test_missing_api_key_skips_client_creation(self, monkeypatch) -> None:
+    def test_missing_api_key_skips_client_creation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         router = GeminiQueryRouter()
         assert router._get_client() is None
@@ -111,22 +111,22 @@ class TestGeminiClientLifecycle:
 class TestRouterDegradationPaths:
     """Verifies graceful degradation to the embedded prompt and rule-based parser."""
 
-    def test_missing_instructions_file_falls_back_to_embedded_prompt(self, monkeypatch) -> None:
+    def test_missing_instructions_file_falls_back_to_embedded_prompt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         router = GeminiQueryRouter(api_key="mock-key")
         monkeypatch.setattr("pathlib.Path.exists", lambda self: False)
         assert router.get_system_instructions() == router.SYSTEM_INSTRUCTION
 
-    def test_instructions_read_failure_falls_back_to_embedded_prompt(self, monkeypatch) -> None:
+    def test_instructions_read_failure_falls_back_to_embedded_prompt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         router = GeminiQueryRouter(api_key="mock-key")
         monkeypatch.setattr("pathlib.Path.exists", lambda self: True)
 
-        def unreadable(self, encoding=None, errors=None):
+        def unreadable(self, encoding: str | None = None, errors: str | None = None) -> None:
             raise OSError("disk unreadable")
 
         monkeypatch.setattr("pathlib.Path.read_text", unreadable)
         assert router.get_system_instructions() == router.SYSTEM_INSTRUCTION
 
-    def test_api_failure_degrades_to_rule_based_parser_and_counts(self, monkeypatch) -> None:
+    def test_api_failure_degrades_to_rule_based_parser_and_counts(self, monkeypatch: pytest.MonkeyPatch) -> None:
         router = GeminiQueryRouter(api_key="mock-key")
         mock_client = MagicMock()
         mock_client.models.generate_content.side_effect = RuntimeError("503 unavailable")

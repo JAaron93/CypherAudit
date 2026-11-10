@@ -3,8 +3,10 @@
 import os
 import runpy
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -71,7 +73,7 @@ class TestAgentMainRunner:
 class _MockAgent:
     """Stands in for uagents.Agent, capturing wiring decisions without starting a runtime."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: object) -> None:
         self.kwargs = kwargs
         self.name = kwargs.get("name", "mock-agent")
         self.address = "agent1qmockaddress"
@@ -80,33 +82,33 @@ class _MockAgent:
         self.schedule_handlers = {}
         self.ran = False
 
-    def include(self, protocol):
+    def include(self, protocol: object) -> None:
         self.included.append(protocol)
 
-    def on_event(self, event_type):
-        def decorator(fn):
+    def on_event(self, event_type: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             self.event_handlers[event_type] = fn
             return fn
         return decorator
 
-    def on_schedule(self, cron):
-        def decorator(fn):
+    def on_schedule(self, cron: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             self.schedule_handlers[cron] = fn
             return fn
         return decorator
 
-    def run(self):
+    def run(self) -> None:
         self.ran = True
 
 
 @pytest.fixture
-def mock_agent_env(monkeypatch):
+def mock_agent_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setenv("AGENT_SEED", "test-seed-for-mock-agent-wiring")
     monkeypatch.delenv("AGENTVERSE_MAILBOX_KEY", raising=False)
     monkeypatch.delenv("AGENT_ENDPOINT", raising=False)
     instances = []
 
-    def factory(**kwargs):
+    def factory(**kwargs: object) -> _MockAgent:
         agent = _MockAgent(**kwargs)
         instances.append(agent)
         return agent
@@ -118,7 +120,7 @@ def mock_agent_env(monkeypatch):
 class TestAgentWiringVariants:
     """Verifies Agentverse mailbox/endpoint wiring, protocol attachment, and daemon startup."""
 
-    def test_mailbox_key_configures_agentverse_mailbox(self, mock_agent_env, monkeypatch) -> None:
+    def test_mailbox_key_configures_agentverse_mailbox(self, mock_agent_env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AGENTVERSE_MAILBOX_KEY", "test-mailbox-key")
         from src.agent.main import create_agent
 
@@ -126,7 +128,7 @@ class TestAgentWiringVariants:
         assert agent.kwargs["mailbox"] == "test-mailbox-key@https://agentverse.ai"
         assert "endpoint" not in agent.kwargs
 
-    def test_endpoint_used_when_mailbox_absent(self, mock_agent_env, monkeypatch) -> None:
+    def test_endpoint_used_when_mailbox_absent(self, mock_agent_env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AGENT_ENDPOINT", "http://localhost:8000/submit")
         from src.agent.main import create_agent
 
@@ -134,7 +136,7 @@ class TestAgentWiringVariants:
         assert agent.kwargs["endpoint"] == ["http://localhost:8000/submit"]
         assert "mailbox" not in agent.kwargs
 
-    def test_none_protocol_skips_include_but_keeps_housekeeping(self, mock_agent_env, monkeypatch) -> None:
+    def test_none_protocol_skips_include_but_keeps_housekeeping(self, mock_agent_env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("src.agent.main.create_analytics_protocol", lambda **kwargs: None)
         from src.agent.main import create_agent
 
@@ -143,7 +145,7 @@ class TestAgentWiringVariants:
         assert set(agent.schedule_handlers) == {FRESHNESS_CRON, DIGEST_CRON}
 
     @pytest.mark.asyncio
-    async def test_startup_handler_logs_configuration_banner(self, mock_agent_env) -> None:
+    async def test_startup_handler_logs_configuration_banner(self, mock_agent_env: SimpleNamespace) -> None:
         from src.agent.main import create_agent
 
         agent = create_agent()
@@ -153,13 +155,13 @@ class TestAgentWiringVariants:
         assert "SignalChain Oracle" in banner
         assert "crypto_analytics_mart" in banner
 
-    def test_main_runs_the_created_agent(self, mock_agent_env) -> None:
+    def test_main_runs_the_created_agent(self, mock_agent_env: SimpleNamespace) -> None:
         from src.agent.main import main
 
         main()
         assert mock_agent_env.instances[0].ran is True
 
-    def test_module_entrypoint_starts_daemon(self, mock_agent_env, monkeypatch) -> None:
+    def test_module_entrypoint_starts_daemon(self, mock_agent_env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("uagents.Agent", mock_agent_env.factory)
         monkeypatch.delitem(sys.modules, "src.agent.main")
         runpy.run_module("src.agent.main", run_name="__main__")

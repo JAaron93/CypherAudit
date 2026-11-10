@@ -1,8 +1,10 @@
 """Unit & BDD tests for Scheduled Housekeeping: Datamart Freshness Monitoring (Track 8)."""
 
 import threading
+from collections.abc import Callable
 from datetime import date
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -283,8 +285,8 @@ class TestScheduleWiring:
             def __init__(self) -> None:
                 self.schedules = {}
 
-            def on_schedule(self, cron):
-                def decorator(fn):
+            def on_schedule(self, cron: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+                def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
                     self.schedules[cron] = fn
                     return fn
                 return decorator

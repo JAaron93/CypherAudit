@@ -1,6 +1,7 @@
 """Unit tests for Parameterized BigQuery Client & Guardrails in SignalChain Oracle."""
 
 from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
 from src.bigquery.client import BigQueryAnalyticsClient, BigQueryExecutionError, LRUCache, validate_identifier
@@ -322,7 +323,7 @@ class TestFreshnessProbe:
 class TestLRUCacheLifecycle:
     """Verifies TTL expiry, capacity eviction, and recency refresh in the thread-safe cache."""
 
-    def test_expired_entry_evicted_on_read(self, monkeypatch) -> None:
+    def test_expired_entry_evicted_on_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from src.bigquery import client as client_module
 
         clock = [1000.0]
@@ -378,7 +379,7 @@ class TestTemplateAndExecutionErrors:
         with pytest.raises(BigQueryExecutionError, match="No SQL template registered"):
             client.execute_analytics_query("not_a_query", "2025-01-01", "2025-12-31")
 
-    def test_missing_sql_file_rejected(self, tmp_path) -> None:
+    def test_missing_sql_file_rejected(self, tmp_path: Path) -> None:
         client = BigQueryAnalyticsClient(project_id="test-project")
         client.sql_dir = tmp_path
         with pytest.raises(BigQueryExecutionError, match="SQL file not found"):

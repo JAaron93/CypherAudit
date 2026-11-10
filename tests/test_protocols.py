@@ -1,7 +1,9 @@
 """Unit & BDD tests for uAgents Protocol and Message Models in SignalChain Oracle."""
 
 import sys
+from collections.abc import Callable
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -50,7 +52,7 @@ class TestAnalyticsProtocolModels:
         assert len(resp.data_points) == 1
 
 
-def make_request(**overrides) -> AnalyticsQueryRequest:
+def make_request(**overrides: str) -> AnalyticsQueryRequest:
     payload = {
         "query_type": "btc_hodl_waves",
         "start_date": "2025-01-01",
@@ -62,18 +64,18 @@ def make_request(**overrides) -> AnalyticsQueryRequest:
 
 
 @pytest.fixture
-def protocol_env(monkeypatch):
+def protocol_env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """Captures the handler registered by the factory via a stub uagents.Protocol."""
     captured = {}
 
     class StubProtocol:
-        def __init__(self, name=None, version=None):
+        def __init__(self, name: str | None = None, version: str | None = None) -> None:
             pass
 
-        def on_message(self, **kwargs):
+        def on_message(self, **kwargs: object) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
             captured["registration"] = kwargs
 
-            def decorator(fn):
+            def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
                 captured["handler"] = fn
                 return fn
 
@@ -82,7 +84,11 @@ def protocol_env(monkeypatch):
     monkeypatch.setattr("uagents.Protocol", StubProtocol)
     monkeypatch.setattr(protocol_module, "USAGE_DIGEST", UsageDigest())
 
-    def build(bigquery_client=None, rate_limiter=None, circuit_breaker=None):
+    def build(
+        bigquery_client: MagicMock | None = None,
+        rate_limiter: MagicMock | None = None,
+        circuit_breaker: SecurityCircuitBreaker | None = None,
+    ) -> Callable[..., Any]:
         if rate_limiter is None:
             rate_limiter = MagicMock()
             rate_limiter.check_rate_limit.return_value = (True, "OK")
@@ -97,18 +103,18 @@ def protocol_env(monkeypatch):
 
 
 @pytest.fixture
-def ctx():
+def ctx() -> MagicMock:
     context = MagicMock()
     context.send = AsyncMock()
     return context
 
 
 class TestAnalyticsProtocolFactory:
-    def test_returns_none_when_uagents_unavailable(self, monkeypatch) -> None:
+    def test_returns_none_when_uagents_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setitem(sys.modules, "uagents", None)
         assert create_analytics_protocol(MagicMock(), MagicMock(), MagicMock()) is None
 
-    def test_handler_registered_for_request_response_models(self, protocol_env) -> None:
+    def test_handler_registered_for_request_response_models(self, protocol_env: SimpleNamespace) -> None:
         handler = protocol_env.build()
         assert callable(handler)
         registration = protocol_env.captured["registration"]
@@ -117,7 +123,7 @@ class TestAnalyticsProtocolFactory:
 
 
 class TestAnalyticsProtocolHandler:
-    async def test_rate_limited_sender_gets_rate_limited_response(self, protocol_env, ctx) -> None:
+    async def test_rate_limited_sender_gets_rate_limited_response(self, protocol_env: SimpleNamespace, ctx: MagicMock) -> None:
         limiter = MagicMock()
         limiter.check_rate_limit.return_value = (False, "Daily limit exceeded (30 req/day).")
         bq = MagicMock()
@@ -133,7 +139,7 @@ class TestAnalyticsProtocolHandler:
         bq.execute_analytics_query.assert_not_called()
         assert protocol_module.USAGE_DIGEST.snapshot()["rate_limited"] == 1
 
-    async def test_security_violation_returns_error_response(self, protocol_env, ctx) -> None:
+    async def test_security_violation_returns_error_response(self, protocol_env: SimpleNamespace, ctx: MagicMock) -> None:
         bq = MagicMock()
         handler = protocol_env.build(bigquery_client=bq)
 
@@ -146,7 +152,7 @@ class TestAnalyticsProtocolHandler:
         bq.execute_analytics_query.assert_not_called()
         assert protocol_module.USAGE_DIGEST.snapshot()["security_violations"] == 1
 
-    async def test_success_path_forwards_bigquery_payload(self, protocol_env, ctx) -> None:
+    async def test_success_path_forwards_bigquery_payload(self, protocol_env: SimpleNamespace, ctx: MagicMock) -> None:
         bq = MagicMock()
         bq.execute_analytics_query.return_value = {
             "status": "SUCCESS",
@@ -174,7 +180,7 @@ class TestAnalyticsProtocolHandler:
         )
         assert protocol_module.USAGE_DIGEST.snapshot()["queries_served"] == 1
 
-    async def test_bigquery_failure_returns_error_response(self, protocol_env, ctx) -> None:
+    async def test_bigquery_failure_returns_error_response(self, protocol_env: SimpleNamespace, ctx: MagicMock) -> None:
         bq = MagicMock()
         bq.execute_analytics_query.side_effect = RuntimeError("quota exceeded")
         handler = protocol_env.build(bigquery_client=bq)
