@@ -42,3 +42,6 @@
   - Recognize graceful exception mapping (`is_fallback = True`, `winner = "tie"`) as legitimate resilience, not "swallowing security errors".
 - **Review Circuit Breaker Hard Gate (10 Reviews / Early Oscillation):** If a review loop reaches 10 iterations or exhibits Catch-22 oscillation, the circuit breaker must be tripped immediately to halt speculative code churn and update review configuration.
 
+## 7. Version-Free Rules Enforcement
+- Dependency version ranges live exclusively in the manifests (`pyproject.toml`); vendor dependency metadata is the authoritative reference. Never quote rule-prose version numbers as constraints and never ask contributors to raise or lower manifests to match stale prose (era-specific prose numbers are drift evidence, not requirements). Review comments on dependency versions MUST cite the active manifest, not historical rule text.
+

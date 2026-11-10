@@ -203,3 +203,12 @@ Automated AI review bots (e.g., Greptile, CodeRabbit, GitHub Copilot) evaluate P
     2. Run diagnostic thread checks via `review-agent-circuit-breaker`.
     3. Update repository reviewer configuration (`.greptile/rules.md`, `.greptile/config.json`) to enforce boundary rules in prose.
     4. If the reviewer's score remains depressed despite 0 open comments and 100% test pass rates, halt and alert the human developer rather than generating speculative code churn.
+
+---
+
+## 8. Version-Free Rules Doctrine
+
+* **Single Source of Truth:** Constraint-bearing dependency versions (floors, ceilings, exact pins) MUST be stated exactly once, in the manifests (`pyproject.toml` for this repository). The advisory source of truth is the vendor's own declared dependency metadata (`importlib.metadata` on installed distributions, the PyPI registry JSON).
+* **Series-Only Prose:** Rulebooks (`AGENTS.md`, `.greptile/rules.md`, `specs/foundation-spec/**`, `README.md` claims) and review directives MUST reference version *series* only (e.g. "Pydantic v2", "Python 3.x"). Quoting package floors/ceilings in prose is prohibited — they age into falsehood. Precedent (dated drift evidence, 2026-11-10 audit): two disguised floors in living spec prose (`Python 3.11+` in the design.md Target Platform; `uAgents 0.26+` in its §6.2 heading) duplicated `pyproject.toml` constraints, and the uAgents prose floor had already drifted looser than the manifest floor (`0.26+` vs `>=0.26.1`). Model identifiers (e.g. `gemini-3.8-flash`) are product identity, not dependency constraints.
+* **Exceptions:** Immutable archives (e.g. a future `docs/archive/**`) and dated release notes may quote era-specific versions. Within living rulebooks, historical numbers may appear ONLY when explicitly labeled as dated drift evidence.
+* **PR Discipline:** A diff that changes a manifest constraint MUST NOT also edit rule-prose version numbers (and vice versa); dependency PRs MUST verify resolvability (`pip install --dry-run` of the affected packages against the manifest) before commit.

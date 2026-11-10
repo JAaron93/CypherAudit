@@ -2,7 +2,7 @@
 
 **Document Version:** 1.6.0  
 **Status:** Approved for Implementation (Final Baseline)  
-**Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks (WASM / GitHub Pages / molab), Python 3.11+  
+**Target Platform:** Google Cloud BigQuery, Google Cloud Scheduler, Fetch.ai / ASI Agentverse, Marimo Notebooks (WASM / GitHub Pages / molab), Python 3.x (minimum version owned by `pyproject.toml` → `requires-python`)  
 **LLM Engine:** Gemini 3.8 Flash (`gemini-3.8-flash`) via `google-genai`  
 **Time Horizon:** 2014–2026 Baseline Audit + Continuous Monthly Incremental Ingestion (2027+)  
 **Scheduler & Publishing:** Google Cloud Scheduler (`0 0 1 * *` UTC) + Automated Marimo Web Publishing
@@ -140,7 +140,7 @@ V = \frac{Y}{M} = \frac{\sum_{i=1}^{N} \text{TxValue}_i}{\text{CirculatingSupply
 ### 6.1 Motivation & Ownership Boundary
 Ingestion ownership remains 100% serverless in GCP (Cloud Scheduler `0 0 1 * *` UTC → BigQuery scheduled `MERGE INTO`). The agent never writes to the datamart and never runs ETL. What the agent *can* do — as the datamart's always-on consumer — is detect when that serverless pipeline silently stops producing rows and report its own runtime health. `src/agent/housekeeping.py` therefore contains read-only, fail-soft monitoring only.
 
-### 6.2 Scheduling Primitives (uAgents 0.26+)
+### 6.2 Scheduling Primitives (uAgents; version floor owned by `pyproject.toml`)
 Both handlers register through the uAgents cron scheduler (`Agent.on_schedule`, powered by `cronsim`, evaluated in UTC by default):
 
 | Handler | Cron (UTC) | Surface |
