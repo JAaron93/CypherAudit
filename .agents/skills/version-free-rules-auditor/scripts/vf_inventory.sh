@@ -77,8 +77,14 @@ scan() { # $1 = regex, $2 = junk-filtered output rows
       #                                ^ number binds a unit: "16s", "~10,000 requests"
       if (tok ~ /[0-9]$/ && after ~ /^[[:space:]]?(%|×)/) return 1
       #                                ^ ">= 80%"
-      if (tok ~ /[0-9]$/ && after ~ /^[[:space:]]?[-][0-9]+([,][0-9]+)*[[:space:]]?(seconds?|minutes?|hours?|days?|ms|s|KB|MB|GB|bytes|tokens?|frames?|chars?|lines?|requests?|analyses)([^A-Za-z]|$)/) return 1
-      #                                ^ range with unit: "~2-5 KB"
+      if (tok ~ /[0-9]$/ && after ~ /^[[:space:]]?[-][0-9]+([,][0-9]+)*[[:space:]]?(%|×|seconds?|minutes?|hours?|days?|ms|s|KB|MB|GB|bytes|tokens?|frames?|chars?|lines?|requests?|analyses)([^A-Za-z]|$)/) return 1
+      #                                ^ range with unit or percent: "~2-5 KB", "~1-2%"
+      if (tok ~ /[+]$/ && after ~ /^[[:space:]]+(years?|months?|decades?|weeks?|days?|hours?|minutes?|seconds?|people|users|items|entries|rows)([^A-Za-z]|$)/) return 1
+      #                                ^ quantity-plus: "auditing 10+ years", "100+ users"
+      id = tok
+      sub(/[[:space:]]+[vV]?[0-9]+([.][0-9]+)*[+]$/, "", id)
+      if (tok ~ /[+]$/ && id ~ /^(to|from|the|a|an|of|in|on|and|or|for|with|by|at|is|are|was|were|be|been|has|have|had|up|out|over|under|than|then|that|this|it|its|as|we|you|they|between|past|since|during|about)$/) return 1
+      #                                ^ stopword floor: "(2014 to 2026+)"
       return 0
     }
     {

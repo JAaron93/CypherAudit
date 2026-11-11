@@ -130,6 +130,24 @@ def test_real_constraint_survives_noise_on_same_line(tmp_path: Path) -> None:
     assert "./mix.md:1" in done.stdout
 
 
+def test_quantity_and_year_plus_prose_not_flagged(tmp_path: Path) -> None:
+    # Regression: "10+ years" quantity prose and stopword year floors
+    # ("2014 to 2026+") are not version constraints; real suffix floors stay flagged.
+    write(
+        tmp_path,
+        "telos.md",
+        "auditing 10+ years of history (2014 to 2026+)\n"
+        "surveys show ~1-2% payment adoption\n"
+        "Python 3.11+ is the floor\n",
+    )
+    done = run_inventory(tmp_path)
+    assert done.returncode == 1
+    rows = done.stdout
+    assert "./telos.md:3" in rows  # real suffix floor
+    assert "./telos.md:1" not in rows  # quantity + stopword year
+    assert "./telos.md:2" not in rows  # percent range estimate
+
+
 def test_unit_suffixed_constraint_survives_percent_elsewhere(tmp_path: Path) -> None:
     # Issue 1 regression: number-and-unit noise elsewhere on the line must not
     # discard a real constraint ("95%" coverage note + real floor).
