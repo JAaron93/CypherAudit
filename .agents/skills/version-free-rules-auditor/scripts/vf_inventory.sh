@@ -28,40 +28,77 @@ if [ ! -d "$REPO" ]; then echo "error: not a directory: $REPO" >&2; exit 2; fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# Anchored: identifier + binding operator + version.  Loose: operator + version only.
+# Anchored: identifier + binding operator + version, or identifier + suffix floor
+# ("uAgents 0.26+", "Python 3.11+" — trailing + glues directly to the version).
+# Loose: operator + version only, or a dotted suffix floor ("3.11+").
 # Bare ~ / ^ REQUIRE a dotted version (estimates like "~8 seconds" are duration prose,
 # not constraints) while >=,<=,==,~= keep single-component form (e.g. >=3.10).
-ANCHOR_RE='([A-Za-z][A-Za-z0-9_.@/-]{1,60})[[:space:]]*(>=|<=|==|~=|~|\^)[[:space:]]*[vV]?[0-9]+'
-LOOSE_RE='(>=|<=|==|~=|~|\^)[[:space:]]*[vV]?[0-9]+(\.[0-9]+)*'
+ANCHOR_RE='([A-Za-z][A-Za-z0-9_.@/-]{1,60})[[:space:]]*(>=|<=|==|~=|~|\^)[[:space:]]*[vV]?[0-9]+|([A-Za-z][A-Za-z0-9_.@/-]{1,60})[[:space:]]*[vV]?[0-9]+(\.[0-9]+)*[+]'
+LOOSE_RE='(>=|<=|==|~=|~|\^)[[:space:]]*[vV]?[0-9]+(\.[0-9]+)*|[0-9]+\.[0-9]+[+]'
 
+# --hidden: hidden rulebooks (.greptile/rules.md, .cursor/rules/**) are explicitly
+# governed prose and MUST be scanned; venvs/package dirt stay excluded.
 G=()
 for g in '*.md' '*.mdc' '!**/docs/archive/**' '!**/archive*/**' '!**/CHANGELOG*' \
-         '!**/node_modules/**' '!**/.git/**' '!**/__pycache__/**'; do
+         '!**/node_modules/**' '!**/.git/**' '!**/.venv/**' '!**/__pycache__/**'; do
   G+=(--glob "$g")
 done
 
-# Duration/estimate junk filter: drop rows whose text binds a number straight to a
-# unit ("16s", "8ms", "~2-5 KB", ">= 80%"), estimate phrasing ("lines ~1542",
-# "~10,000 requests", "~475 container-hours", "input tokens", "analyses / day"),
-# JS strict equality ("=== 402" — the loose == matches from its 2nd '='), and
-# Python `assert` snippets quoted inside walkthrough code blocks. NOTE: %/× use
-# boundary-FREE forms — a trailing \b after a non-word char never matches.
-# Deliberate tradeoff: acceptable false negatives (unit-suffixed constraints are
-# rare in rule prose) against unusable noise.
-U=(-e '[0-9]s\b'
-   -e '[0-9][[:space:]]?(ms|KB|MB|GB|bytes|tokens?|frames?|chars?)\b'
-   -e '[0-9][[:space:]]?%'
-   -e '[0-9][[:space:]]?×'
-   -e '[0-9]+[[:space:]](s|seconds?|minutes?|hours?|ms|KB|MB|GB|bytes|tokens?|chars?|lines?|requests?)\b'
-   -e '\b(tokens?|hours?|days?|lines?|requests?|analyses)\b'
-   -e '\bassert\b'
-   -e '(===|!==)'
-  )
-
-(cd "$REPO" && rg -n -e "$ANCHOR_RE" "${G[@]}" .) 2>/dev/null \
-  | rg -v "${U[@]}" 2>/dev/null >"$TMP/anchor.raw" || true
-(cd "$REPO" && rg -n -e "$LOOSE_RE" "${G[@]}" .) 2>/dev/null \
-  | rg -v "${U[@]}" 2>/dev/null >"$TMP/loose.raw" || true
+# Duration/estimate junk is classified PER MATCH, not per line: a candidate row
+# is dropped only when EVERY match of the scan regex on that line is
+# number-and-unit noise. A line with at least one genuine version match ("Use
+# requests>=2.31 for HTTP calls", "tabulate>=0.10.0 (95% coverage)") is KEPT,
+# even when the same line also contains durations or unit words — the previous
+# line-level `rg -v` filter discarded such real constraints wholesale (false
+# negatives). Residual tradeoff: estimate prose without an attached unit word
+# may survive as a false-positive candidate; never a false negative.
+scan() { # $1 = regex, $2 = junk-filtered output rows
+  local rc=0
+  # Run rg unpiped so its exit code cannot be masked: with `pipefail`, a
+  # downstream filter exiting 1 would supersede rg's fatal exit 2 and a
+  # partially-scanned corpus would masquerade as a clean sweep.
+  (cd "$REPO" && rg -n --hidden -e "$1" "${G[@]}" .) >"$TMP/raw.tsv" 2>"$TMP/scan.err" || rc=$?
+  if [ "$rc" -ge 2 ]; then
+    echo "error: inventory scan failed (rg exit $rc — unreadable file or bad glob):" >&2
+    cat "$TMP/scan.err" >&2
+    exit 2
+  fi
+  # The scan regex arrives via the environment (not `awk -v`) because -v
+  # assignment values undergo backslash-escape processing that would corrupt
+  # the `\.` / `\^` operators in the pattern.
+  VF_RE="$1" awk '
+    function junk(tok, after, before) {
+      if (tok ~ /===|!==/) return 1                             # JS strict equality
+      if (before ~ /=$/ && tok ~ /^==/) return 1                # === seen via its 2nd =
+      if (before ~ /(^|[^A-Za-z])assert([^A-Za-z]|$)/) return 1 # quoted assert snippet
+      if (before ~ /(lines?|requests?|tokens?|analyses|hours?|days?)[[:space:]]+$/ && tok ~ /^[~^]/) return 1
+      #                                ^ estimate phrasing: "lines ~1542"
+      if (tok ~ /[0-9]$/ && after ~ /^([,][0-9]+)*[[:space:]]?(seconds?|minutes?|hours?|days?|ms|s|KB|MB|GB|bytes|tokens?|frames?|chars?|lines?|requests?|analyses)([^A-Za-z]|$)/) return 1
+      #                                ^ number binds a unit: "16s", "~10,000 requests"
+      if (tok ~ /[0-9]$/ && after ~ /^[[:space:]]?(%|×)/) return 1
+      #                                ^ ">= 80%"
+      if (tok ~ /[0-9]$/ && after ~ /^[[:space:]]?[-][0-9]+([,][0-9]+)*[[:space:]]?(seconds?|minutes?|hours?|days?|ms|s|KB|MB|GB|bytes|tokens?|frames?|chars?|lines?|requests?|analyses)([^A-Za-z]|$)/) return 1
+      #                                ^ range with unit: "~2-5 KB"
+      return 0
+    }
+    {
+      if (match($0, /^[^:]+:[0-9]+:/)) {
+        content = substr($0, RLENGTH + 1)   # strip the path:line: prefix
+      } else { content = $0 }
+      kept = 0; t = content
+      while (match(t, ENVIRON["VF_RE"])) {
+        tok   = substr(t, RSTART, RLENGTH)
+        after = substr(t, RSTART + RLENGTH, 16)
+        before = substr(content, 1, length(content) - length(t) + RSTART - 1)
+        if (!junk(tok, after, before)) { kept = 1; break }
+        t = substr(t, RSTART + RLENGTH)
+      }
+      if (kept) print $0
+    }
+  ' "$TMP/raw.tsv" >"$2"
+}
+scan "$ANCHOR_RE" "$TMP/anchor.raw"
+scan "$LOOSE_RE" "$TMP/loose.raw"
 
 # Normalize "path:NN:" prefixes into file:line<TAB>snippet rows (paths may contain ':').
 # BSD sed cannot expand \t inside replacements — embed a literal TAB instead.

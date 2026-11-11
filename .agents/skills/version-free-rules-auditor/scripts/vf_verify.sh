@@ -68,8 +68,16 @@ if [ -n "$ALLOW" ]; then
   grep -Ev '^[[:space:]]*(#|$)' "$ALLOW" >"$TMP/allow.keys" || true
   # Allowlist matches the row KEY (column 1), not the whole row: compare on the
   # first TSV field so `path:line` keys filter rows regardless of the snippet.
-  awk -F'\t' 'FNR==NR { keys[$1]; next } !($1 in keys) { print }' \
-    "$TMP/allow.keys" "$TMP/inv.tsv" >"$TMP/viol.tsv"
+  # FILENAME==ARGV[1], NOT FNR==NR: with an empty/comment-only allow file NR never
+  # advances past the first file, so FNR==NR holds for EVERY inv.tsv row and all
+  # violations are swallowed as "keys" — fail-open. The -s guard additionally fails
+  # closed: an empty allowlist filters nothing.
+  if [ -s "$TMP/allow.keys" ]; then
+    awk -F'\t' 'FILENAME==ARGV[1] { keys[$1]; next } !($1 in keys) { print }' \
+      "$TMP/allow.keys" "$TMP/inv.tsv" >"$TMP/viol.tsv"
+  else
+    cp "$TMP/inv.tsv" "$TMP/viol.tsv"
+  fi
 else
   cp "$TMP/inv.tsv" "$TMP/viol.tsv"
 fi
@@ -93,8 +101,21 @@ if [ -n "$BASE" ] && [ "$STRICT" -eq 1 ]; then
         DVIOL="$DVIOL  DENY $f — protected artifact (env/db) never in a docs PR
 "
         ;;
-      *.md|*.mdc|*.yaml|*.yml|README*|LICENSE*|.greptile/*|.agents/*|.cursor/*)
+      .github/*)
+        DVIOL="$DVIOL  DENY $f — GitHub config incl. executable workflows: never in a docs-only governance PR
+"
+        ;;
+      *.md|*.mdc|README*|LICENSE*|.greptile/*|.agents/*|.cursor/*)
         : ;;  # prose / review-config: allowed by design
+      *.yaml|*.yml)
+        # YAML is allowed only for review-settings paths; other YAML (CI pipelines,
+        # deploy manifests) is executable-adjacent and fails closed.
+        case "$f" in
+          .*.yaml|.*.yml) : ;;  # root dotfile review configs (.coderabbit.yaml, …)
+          *) DVIOL="$DVIOL  DENY $f — YAML allowed only for review-config paths in a docs-only PR
+" ;;
+        esac
+        ;;
       *)
         DVIOL="$DVIOL  DENY $f — not prose/review-config (docs-only governance PR policy)
 "
