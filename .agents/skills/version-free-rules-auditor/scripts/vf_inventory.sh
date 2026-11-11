@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vf_inventory.sh — Version-Free Rules drift inventory (read-only).
+# vf_inventory.sh — Version-Free Rules drift inventory (read-only). [hardened 2026-11-11]
 #
 # Scans living rule prose for constraint-BINDING versions — the kind that silently
 # outlive vendor dependency metadata. Series/identity references ("ADK 2.x",
