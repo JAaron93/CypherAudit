@@ -224,6 +224,19 @@ def test_gate_b_limits_yaml_to_review_config(tmp_path: Path) -> None:
     assert ".coderabbit.yaml" not in done.stderr
 
 
+def test_gate_b_allows_verifier_test_suite(tmp_path: Path) -> None:
+    # Regression: the verifier's own test suite is governance tooling (the TDD
+    # rule requires it under tests/); a strict diff touching only that file
+    # must pass Gate B so the documented command works on verifier PRs.
+    root, base = init_git_repo(tmp_path)
+    write(root, "tests/test_vf_scripts.py", "def test_ok() -> None:\n    assert True\n")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "pin verifier")
+    done = run_verify(root, "--base", base)
+    assert done.returncode == 0
+    assert "PASS diff gate" in done.stdout
+
+
 def test_verify_bad_base_ref_is_usage_error(tmp_path: Path) -> None:
     root, _ = init_git_repo(tmp_path)
     assert run_verify(root, "--base", "no-such-ref").returncode == 2

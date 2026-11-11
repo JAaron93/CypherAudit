@@ -105,6 +105,8 @@ if [ -n "$BASE" ] && [ "$STRICT" -eq 1 ]; then
         DVIOL="$DVIOL  DENY $f — GitHub config incl. executable workflows: never in a docs-only governance PR
 "
         ;;
+      tests/test_vf_scripts.py)
+        : ;;  # the verifier's own test suite: governance tooling (TDD rule), sole tests/ exemption
       *.md|*.mdc|README*|LICENSE*|.greptile/*|.agents/*|.cursor/*)
         : ;;  # prose / review-config: allowed by design
       *.yaml|*.yml)
