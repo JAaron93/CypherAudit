@@ -1,0 +1,16 @@
+# Version-Free Rules verify allowlist (vf_verify Gate A exemptions).
+# Format: one `path:line` key per line; `#` comments. Exemptions are reserved
+# exclusively for historical numbers explicitly labeled as dated drift evidence
+# in living prose (see AGENTS.md section 8, "Exceptions").
+#
+# ./AGENTS.md:212 — the Version-Free Rules Doctrine's "Series-Only Prose" precedent
+# clause (adopted in f477ada / PR #8, 2026-11-10). The version numbers quoted there
+# are the single labeled drift-evidence trail for the de-versioned design.md floors
+# (`Python 3.11+` Target Platform; `uAgents 0.26+` section 6.2 heading, drifted
+# looser than the manifest floor). Do not delete this trail; re-key the entry in
+# the same PR if any edit shifts that line.
+#
+# Canonical invocation (run from repo root):
+#   bash ~/.agents/skills/version-free-rules-auditor/scripts/vf_verify.sh . \
+#     --base <default-branch-tip> --allow .greptile/vf-allow.txt
+./AGENTS.md:212
